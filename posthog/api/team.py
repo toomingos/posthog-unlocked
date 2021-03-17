@@ -87,7 +87,7 @@ class TeamViewSet(AnalyticsDestroyModelMixin, viewsets.ModelViewSet):
     permission_classes = [
         permissions.IsAuthenticated,
         ProjectMembershipNecessaryPermissions,
-        PremiumMultiprojectPermissions,
+        # PremiumMultiprojectPermissions,
         OrganizationMemberPermissions,
         OrganizationAdminWritePermissions,
     ]
@@ -116,7 +116,7 @@ class TeamViewSet(AnalyticsDestroyModelMixin, viewsets.ModelViewSet):
                 permission()
                 for permission in [
                     permissions.IsAuthenticated,
-                    PremiumMultiprojectPermissions,
+                    # PremiumMultiprojectPermissions,
                     OrganizationAdminWritePermissions,  # Using current org so we don't need to validate membership
                 ]
             ]
