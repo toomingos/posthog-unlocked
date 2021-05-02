@@ -9,10 +9,11 @@ import {
     PushpinFilled,
     PlusOutlined,
     SettingOutlined,
+    HomeOutlined,
 } from '@ant-design/icons'
 import { useActions, useValues } from 'kea'
 import { Link } from 'lib/components/Link'
-import { sceneLogic } from 'scenes/sceneLogic'
+import { Scene, sceneLogic } from 'scenes/sceneLogic'
 import { isMobile } from 'lib/utils'
 import { useEscapeKey } from 'lib/hooks/useEscapeKey'
 import lgLogo from 'public/posthog-logo-white.svg'
@@ -38,9 +39,10 @@ import { useGlobalKeyboardHotkeys, useKeyboardHotkeys } from 'lib/hooks/useKeybo
 import { featureFlagLogic } from 'lib/logic/featureFlagLogic'
 import { router } from 'kea-router'
 import { eventUsageLogic } from 'lib/utils/eventUsageLogic'
+import { FEATURE_FLAGS } from 'lib/constants'
 
 // to show the right page in the sidebar
-const sceneOverride: Record<string, string> = {
+const sceneOverride: Partial<Record<Scene, string>> = {
     action: 'actions',
     person: 'persons',
     dashboard: 'dashboards',
@@ -65,7 +67,7 @@ const MenuItem = ({ title, icon, identifier, to, hotkey, tooltip, onClick }: Men
     const { featureFlags } = useValues(featureFlagLogic)
 
     function activeScene(): string {
-        const nominalScene = loadingScene || scene
+        const nominalScene: Scene = loadingScene || scene
         // Scenes with special handling can go here
         return sceneOverride[nominalScene] || nominalScene
     }
@@ -100,11 +102,12 @@ const MenuItem = ({ title, icon, identifier, to, hotkey, tooltip, onClick }: Men
                 title={
                     tooltip && !isMobile() ? (
                         <>
-                            <div className="mb-05">
+                            <div className="mb-025">
                                 <b>{title}</b>
                                 {hotkey && featureFlags['hotkeys-3740'] && (
                                     <>
                                         <span className="hotkey menu-tooltip-hotkey">G</span>
+                                        <span className="hotkey-plus" />
                                         <span className="hotkey menu-tooltip-hotkey">{hotkey.toUpperCase()}</span>
                                     </>
                                 )}
@@ -250,10 +253,17 @@ export function MainNavigation(): JSX.Element {
             >
                 <div className="navigation-inner" ref={navRef} onScroll={handleNavScroll}>
                     <div className="nav-logo">
-                        <Link to="/insights">
-                            <img src={smLogo} className="logo-sm" alt="" />
-                            <img src={lgLogo} className="logo-lg" alt="" />
-                        </Link>
+                        {featureFlags[FEATURE_FLAGS.PROJECT_HOME] ? (
+                            <Link to="/home">
+                                <img src={smLogo} className="logo-sm" alt="" />
+                                <img src={lgLogo} className="logo-lg" alt="" />
+                            </Link>
+                        ) : (
+                            <Link to="/insights">
+                                <img src={smLogo} className="logo-sm" alt="" />
+                                <img src={lgLogo} className="logo-lg" alt="" />
+                            </Link>
+                        )}
                     </div>
                     {currentOrganization?.setup.is_active && (
                         <MenuItem
@@ -263,6 +273,9 @@ export function MainNavigation(): JSX.Element {
                             to="/setup"
                             hotkey="u"
                         />
+                    )}
+                    {featureFlags[FEATURE_FLAGS.PROJECT_HOME] && (
+                        <MenuItem title="Home" icon={<HomeOutlined />} identifier="home" to="/home" />
                     )}
                     <MenuItem
                         title="Insights"

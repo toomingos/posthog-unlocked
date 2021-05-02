@@ -30,7 +30,7 @@ function isMembershipLevelChangeDisallowed(
     newLevelOrAllowedLevels: OrganizationMembershipLevel | OrganizationMembershipLevel[]
 ): false | string {
     const currentMembershipLevel = currentOrganization?.membership_level
-    if (memberChanged.user_id === currentUser.id) {
+    if (memberChanged.user.uuid === currentUser.uuid) {
         return "You can't change your own access level."
     }
     if (!currentMembershipLevel) {
@@ -74,15 +74,16 @@ function LevelComponent(member: OrganizationMemberType): JSX.Element | null {
 
     const { level } = member
 
-    function generateHandleClick(listLevel: OrganizationMembershipLevel): () => void {
-        return function handleClick() {
+    function generateHandleClick(listLevel: OrganizationMembershipLevel): (event: React.MouseEvent) => void {
+        return function handleClick(event: React.MouseEvent) {
+            event.preventDefault()
             if (!user) {
                 throw Error
             }
             if (listLevel === OrganizationMembershipLevel.Owner) {
                 Modal.confirm({
                     centered: true,
-                    title: `Transfer organization ownership to ${member.user_first_name}?`,
+                    title: `Transfer organization ownership to ${member.user.first_name}?`,
                     content: `You will no longer be the owner of ${user.organization?.name}. After the transfer you will become an administrator.`,
                     icon: <SwapOutlined />,
                     okType: 'danger',
@@ -98,7 +99,10 @@ function LevelComponent(member: OrganizationMemberType): JSX.Element | null {
     }
 
     const levelButton = (
-        <Button icon={level === OrganizationMembershipLevel.Owner ? <CrownFilled /> : undefined}>
+        <Button
+            data-attr="change-membership-level"
+            icon={level === OrganizationMembershipLevel.Owner ? <CrownFilled /> : undefined}
+        >
             {organizationMembershipLevelToName.get(level) ?? `unknown (${level})`}
         </Button>
     )
@@ -115,8 +119,8 @@ function LevelComponent(member: OrganizationMemberType): JSX.Element | null {
             overlay={
                 <Menu>
                     {allowedLevels.map((listLevel) => (
-                        <Menu.Item key={`${member.user_id}-level-${listLevel}`}>
-                            <a href="#" onClick={generateHandleClick(listLevel)}>
+                        <Menu.Item key={`${member.user.uuid}-level-${listLevel}`}>
+                            <a href="#" onClick={generateHandleClick(listLevel)} data-test-level={listLevel}>
                                 {listLevel === OrganizationMembershipLevel.Owner ? (
                                     <>
                                         <CrownFilled style={{ marginRight: '0.5rem' }} />
@@ -160,18 +164,15 @@ function ActionsComponent(member: OrganizationMemberType): JSX.Element | null {
             throw Error
         }
         Modal.confirm({
-            title: `${member.user_id == user.id ? 'Leave' : `Remove ${member.user_first_name} from`} organization ${
+            title: `${member.user.uuid == user.uuid ? 'Leave' : `Remove ${member.user.first_name} from`} organization ${
                 user.organization?.name
             }?`,
             icon: <ExclamationCircleOutlined />,
-            okText: member.user_id == user.id ? 'Leave' : 'Remove',
+            okText: member.user.uuid == user.uuid ? 'Leave' : 'Remove',
             okType: 'danger',
             cancelText: 'Cancel',
             onOk() {
                 removeMember(member)
-                if (member.user_id == user.id) {
-                    location.reload()
-                }
             },
         })
     }
@@ -179,15 +180,15 @@ function ActionsComponent(member: OrganizationMemberType): JSX.Element | null {
     const allowDeletion =
         // higher-ranked users cannot be removed, at the same time the currently logged-in user can leave any time
         ((currentMembershipLevel >= OrganizationMembershipLevel.Admin && member.level <= currentMembershipLevel) ||
-            member.user_id === user.id) &&
+            member.user.uuid === user.uuid) &&
         // unless that user is the organization's owner, in which case they can't leave
         member.level !== OrganizationMembershipLevel.Owner
 
     return (
         <div>
             {allowDeletion && (
-                <a className="text-danger" onClick={handleClick}>
-                    {member.user_id !== user.id ? (
+                <a className="text-danger" onClick={handleClick} data-attr="delete-org-membership">
+                    {member.user.uuid !== user.uuid ? (
                         <DeleteOutlined title="Remove Member" />
                     ) : (
                         <LogoutOutlined title="Leave Organization" />
@@ -215,10 +216,10 @@ export function Members({ user }: { user: UserType }): JSX.Element {
             dataIndex: 'user_first_name',
             key: 'user_first_name',
             render: (firstName: string, member: Record<string, any>) =>
-                member.user_id == user.id ? `${firstName} (me)` : firstName,
+                member.user_id == user.uuid ? `${firstName} (me)` : firstName,
             sorter: (a, b) =>
-                (a as OrganizationMemberType).user_first_name.localeCompare(
-                    (b as OrganizationMemberType).user_first_name
+                (a as OrganizationMemberType).user.first_name.localeCompare(
+                    (b as OrganizationMemberType).user.first_name
                 ),
         },
         {
@@ -226,7 +227,7 @@ export function Members({ user }: { user: UserType }): JSX.Element {
             dataIndex: 'user_email',
             key: 'user_email',
             sorter: (a, b) =>
-                (a as OrganizationMemberType).user_email.localeCompare((b as OrganizationMemberType).user_email),
+                (a as OrganizationMemberType).user.email.localeCompare((b as OrganizationMemberType).user.email),
         },
         {
             title: 'Level',
@@ -267,6 +268,7 @@ export function Members({ user }: { user: UserType }): JSX.Element {
                 pagination={false}
                 style={{ marginTop: '1rem' }}
                 loading={membersLoading}
+                data-attr="org-members-table"
             />
         </>
     )

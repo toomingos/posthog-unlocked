@@ -22,19 +22,6 @@ def _setup_test_data(klass):
 
 
 class ErrorResponsesMixin:
-    ERROR_RESPONSE_UNAUTHENTICATED: Dict[str, Optional[str]] = {
-        "type": "authentication_error",
-        "code": "not_authenticated",
-        "detail": "Authentication credentials were not provided.",
-        "attr": None,
-    }
-
-    ERROR_RESPONSE_NOT_FOUND: Dict[str, Optional[str]] = {
-        "type": "invalid_request",
-        "code": "not_found",
-        "detail": "Not found.",
-        "attr": None,
-    }
 
     ERROR_INVALID_CREDENTIALS = {
         "type": "validation_error",
@@ -42,6 +29,14 @@ class ErrorResponsesMixin:
         "detail": "Invalid email or password.",
         "attr": None,
     }
+
+    def not_found_response(self, message: str = "Not found.") -> Dict[str, Optional[str]]:
+        return {
+            "type": "invalid_request",
+            "code": "not_found",
+            "detail": message,
+            "attr": None,
+        }
 
     def permission_denied_response(
         self, message: str = "You do not have permission to perform this action.",
@@ -51,6 +46,34 @@ class ErrorResponsesMixin:
             "code": "permission_denied",
             "detail": message,
             "attr": None,
+        }
+
+    def method_not_allowed_response(self, method: str) -> Dict[str, Optional[str]]:
+        return {
+            "type": "invalid_request",
+            "code": "method_not_allowed",
+            "detail": f'Method "{method}" not allowed.',
+            "attr": None,
+        }
+
+    def unauthenticated_response(
+        self, message: str = "Authentication credentials were not provided.", code: str = "not_authenticated"
+    ) -> Dict[str, Optional[str]]:
+        return {
+            "type": "authentication_error",
+            "code": code,
+            "detail": message,
+            "attr": None,
+        }
+
+    def validation_error_response(
+        self, message: str = "Malformed request", code: str = "invalid", attr: Optional[str] = None,
+    ) -> Dict[str, Optional[str]]:
+        return {
+            "type": "validation_error",
+            "code": code,
+            "detail": message,
+            "attr": attr,
         }
 
 

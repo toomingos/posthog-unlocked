@@ -51,6 +51,7 @@ export const CUSTOM_EVENT = 'custom_event'
 export const ACTION_TYPE = 'action_type'
 export const EVENT_TYPE = 'event_type'
 
+// TODO: Deprecated; should be removed once backend is updated
 export enum ShownAsValue {
     VOLUME = 'Volume',
     STICKINESS = 'Stickiness',
@@ -67,6 +68,7 @@ export const MATHS: Record<string, any> = {
             <>
                 Total event volume.
                 <br />
+                <br />
                 If a user performs an event 3 times in a given day/week/month, it counts as 3.
             </>
         ),
@@ -74,12 +76,37 @@ export const MATHS: Record<string, any> = {
         type: EVENT_MATH_TYPE,
     },
     dau: {
-        name: 'Active users',
+        name: 'Unique users',
         description: (
             <>
-                Users active in the time interval.
+                Unique users who performed the event in the specified time interval.
                 <br />
-                If a user performs an event 3 times in a given day/week/month, it counts only as 1.
+                <br />
+                If a single user performs an event 3 times in a given day/week/month, it counts only as 1.
+            </>
+        ),
+        onProperty: false,
+        type: EVENT_MATH_TYPE,
+    },
+    weekly_active: {
+        name: 'Weekly Active',
+        description: (
+            <>
+                Users active in the past week (7 days). This is a trailing count that aggregates distinct users in the
+                past 7 days for each day in the time series
+            </>
+        ),
+        onProperty: false,
+        type: EVENT_MATH_TYPE,
+    },
+    monthly_active: {
+        name: 'Monthly Active',
+        description: (
+            <>
+                Users active in the past month (30 days).
+                <br />
+                This is a trailing count that aggregates distinct users in the past 30 days for each day in the time
+                series
             </>
         ),
         onProperty: false,
@@ -90,6 +117,7 @@ export const MATHS: Record<string, any> = {
         description: (
             <>
                 Event property sum.
+                <br />
                 <br />
                 For example 3 events captured with property <code>amount</code> equal to 10, 12 and 20, result in 42.
             </>
@@ -103,6 +131,7 @@ export const MATHS: Record<string, any> = {
             <>
                 Event property average.
                 <br />
+                <br />
                 For example 3 events captured with property <code>amount</code> equal to 10, 12 and 20, result in 14.
             </>
         ),
@@ -114,6 +143,7 @@ export const MATHS: Record<string, any> = {
         description: (
             <>
                 Event property minimum.
+                <br />
                 <br />
                 For example 3 events captured with property <code>amount</code> equal to 10, 12 and 20, result in 10.
             </>
@@ -127,6 +157,7 @@ export const MATHS: Record<string, any> = {
             <>
                 Event property maximum.
                 <br />
+                <br />
                 For example 3 events captured with property <code>amount</code> equal to 10, 12 and 20, result in 20.
             </>
         ),
@@ -138,6 +169,7 @@ export const MATHS: Record<string, any> = {
         description: (
             <>
                 Event property median (50th percentile).
+                <br />
                 <br />
                 For example 100 events captured with property <code>amount</code> equal to 101..200, result in 150.
             </>
@@ -151,6 +183,7 @@ export const MATHS: Record<string, any> = {
             <>
                 Event property 90th percentile.
                 <br />
+                <br />
                 For example 100 events captured with property <code>amount</code> equal to 101..200, result in 190.
             </>
         ),
@@ -162,6 +195,7 @@ export const MATHS: Record<string, any> = {
         description: (
             <>
                 Event property 95th percentile.
+                <br />
                 <br />
                 For example 100 events captured with property <code>amount</code> equal to 101..200, result in 195.
             </>
@@ -175,10 +209,22 @@ export const MATHS: Record<string, any> = {
             <>
                 Event property 90th percentile.
                 <br />
+                <br />
                 For example 100 events captured with property <code>amount</code> equal to 101..200, result in 199.
             </>
         ),
         onProperty: true,
         type: PROPERTY_MATH_TYPE,
     },
+}
+
+export const WEBHOOK_SERVICES: Record<string, string> = {
+    Slack: 'slack.com',
+    Discord: 'discord.com',
+    Teams: 'office.com',
+}
+
+export const FEATURE_FLAGS: Record<string, string> = {
+    INGESTION_GRID: 'ingestion-grid-exp-3',
+    PROJECT_HOME: 'project-home-exp-5',
 }

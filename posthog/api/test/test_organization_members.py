@@ -1,9 +1,39 @@
-from posthog.models.organization import OrganizationMembership
+from rest_framework import status
+
+from posthog.models.organization import Organization, OrganizationMembership
 from posthog.models.user import User
 from posthog.test.base import APIBaseTest
 
 
 class TestOrganizationMembersAPI(APIBaseTest):
+    def test_list_organization_members(self):
+
+        response = self.client.get("/api/organizations/@current/members/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        response_data = response.json()
+        self.assertEqual(len(response_data["results"]), self.organization.members.count())
+        instance = OrganizationMembership.objects.get(id=response_data["results"][0]["id"])
+        self.assertEqual(response_data["results"][0]["user"]["uuid"], str(instance.user.uuid))
+        self.assertEqual(response_data["results"][0]["user"]["first_name"], instance.user.first_name)
+
+        # Backwards compatibility
+        self.assertEqual(response_data["results"][0]["id"], response_data["results"][0]["membership_id"])
+
+    def test_cant_list_members_for_an_alien_organization(self):
+        org = Organization.objects.create(name="Alien Org")
+        user = User.objects.create(email="another_user@posthog.com")
+        user.join(organization=org)
+
+        response = self.client.get(f"/api/organizations/{org.id}/members/")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.json(), self.permission_denied_response())
+
+        # Even though there's no retrieve for invites, permissions are validated first
+        response = self.client.get(f"/api/organizations/{org.id}/members/{user.id}")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.json(), self.permission_denied_response())
+
     def test_delete_organization_member(self):
         user = User.objects.create_and_join(self.organization, "test@x.com", None, "X")
         membership_queryset = OrganizationMembership.objects.filter(user=user, organization=self.organization)
@@ -44,7 +74,15 @@ class TestOrganizationMembersAPI(APIBaseTest):
         self.assertDictEqual(
             response_data,
             {
+                "id": str(updated_membership.id),
                 "membership_id": str(updated_membership.id),
+                "user": {
+                    "id": user.id,
+                    "uuid": str(user.uuid),
+                    "distinct_id": str(user.distinct_id),
+                    "first_name": user.first_name,
+                    "email": user.email,
+                },
                 "user_id": user.id,
                 "user_first_name": user.first_name,
                 "user_email": user.email,

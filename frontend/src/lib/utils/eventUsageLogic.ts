@@ -80,12 +80,19 @@ export const eventUsageLogic = kea<
         reportDashboardShareToggled: (isShared: boolean) => ({ isShared }),
         reportUpgradeModalShown: (featureName: string) => ({ featureName }),
         reportHotkeyNavigation: (scope: 'global' | 'insights', hotkey: HotKeys | GlobalHotKeys) => ({ scope, hotkey }),
+        reportIngestionLandingSeen: (isGridView: boolean) => ({ isGridView }),
         reportTimezoneComponentViewed: (
             component: 'label' | 'indicator',
             project_timezone?: string,
             device_timezone?: string
         ) => ({ component, project_timezone, device_timezone }),
         reportTestAccountFiltersUpdated: (filters: Record<string, any>[]) => ({ filters }),
+        reportProjectHomeItemClicked: (
+            module: string,
+            item: string,
+            extraProps?: Record<string, string | boolean | number | undefined>
+        ) => ({ module, item, extraProps }),
+        reportProjectHomeSeen: (teamHasData: boolean) => ({ teamHasData }),
     },
     listeners: {
         reportAnnotationViewed: async ({ annotations }, breakpoint) => {
@@ -103,7 +110,7 @@ export const eventUsageLogic = kea<
                     content_length: annotation.content.length,
                     scope: annotation.scope,
                     deleted: annotation.deleted,
-                    created_by_me: annotation.created_by && annotation.created_by?.id === userLogic.values.user?.id,
+                    created_by_me: annotation.created_by && annotation.created_by?.uuid === userLogic.values.user?.uuid,
                     creation_type: annotation.creation_type,
                     created_at: annotation.created_at,
                     updated_at: annotation.updated_at,
@@ -138,19 +145,7 @@ export const eventUsageLogic = kea<
             await breakpoint(500) // Debounce to avoid noisy events from changing filters multiple times
 
             // Reports `insight viewed` event
-            const { display, interval, date_from, date_to, shown_as, filter_test_accounts, formula } = filters
-
-            // :TODO: DEPRECATED: Remove when releasing `remove-shownas`
-            // Support for legacy `shown_as` property in a way that ensures standardized data reporting
-            let { insight } = filters
-            const SHOWN_AS_MAPPING: Record<string, 'TRENDS' | 'LIFECYCLE' | 'STICKINESS'> = {
-                Volume: 'TRENDS',
-                Lifecycle: 'LIFECYCLE',
-                Stickiness: 'STICKINESS',
-            }
-            if (shown_as) {
-                insight = SHOWN_AS_MAPPING[shown_as]
-            }
+            const { display, interval, date_from, date_to, filter_test_accounts, formula, insight } = filters
 
             const properties: Record<string, any> = {
                 is_first_component_load: isFirstLoad,
@@ -327,6 +322,17 @@ export const eventUsageLogic = kea<
                 }),
             }
             posthog.capture('test account filters updated', payload)
+        },
+        reportIngestionLandingSeen: async ({ isGridView }) => {
+            posthog.capture('ingestion landing seen', { grid_view: isGridView })
+        },
+        reportProjectHomeItemClicked: async ({ module, item, extraProps }) => {
+            const defaultProps = { module, item }
+            const eventProps = extraProps ? { ...defaultProps, ...extraProps } : defaultProps
+            posthog.capture('project home item clicked', eventProps)
+        },
+        reportProjectHomeSeen: async ({ teamHasData }) => {
+            posthog.capture('project home seen', { team_has_data: teamHasData })
         },
     },
 })

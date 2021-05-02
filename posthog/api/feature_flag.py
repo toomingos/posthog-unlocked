@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, cast
 
 import posthoganalytics
 from django.db.models import QuerySet
@@ -6,14 +6,14 @@ from rest_framework import serializers, viewsets
 from rest_framework.permissions import IsAuthenticated
 
 from posthog.api.routing import StructuredViewSetMixin
-from posthog.api.user import UserSerializer
+from posthog.api.shared import UserBasicSerializer
 from posthog.mixins import AnalyticsDestroyModelMixin
 from posthog.models import FeatureFlag
 from posthog.permissions import ProjectMembershipNecessaryPermissions
 
 
 class FeatureFlagSerializer(serializers.HyperlinkedModelSerializer):
-    created_by = UserSerializer(required=False, read_only=True)
+    created_by = UserBasicSerializer(read_only=True)
     # :TRICKY: Needed for backwards compatibility
     filters = serializers.DictField(source="get_filters", required=False)
     is_simple_flag = serializers.SerializerMethodField()
@@ -50,7 +50,7 @@ class FeatureFlagSerializer(serializers.HyperlinkedModelSerializer):
     def validate_key(self, value):
         exclude_kwargs = {}
         if self.instance:
-            exclude_kwargs = {"pk": self.instance.pk}
+            exclude_kwargs = {"pk": cast(FeatureFlag, self.instance).pk}
 
         if (
             FeatureFlag.objects.filter(key=value, team=self.context["request"].user.team, deleted=False)
@@ -76,7 +76,7 @@ class FeatureFlagSerializer(serializers.HyperlinkedModelSerializer):
 
         return instance
 
-    def update(self, instance: FeatureFlag, validated_data: Dict, *args: Any, **kwargs: Any) -> FeatureFlag:  # type: ignore
+    def update(self, instance: FeatureFlag, validated_data: Dict, *args: Any, **kwargs: Any) -> FeatureFlag:
         request = self.context["request"]
         validated_key = validated_data.get("key", None)
         if validated_key:
