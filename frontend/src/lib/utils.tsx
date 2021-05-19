@@ -75,7 +75,7 @@ export function errorToast(title?: string, message?: string, errorDetail?: strin
      */
 
     const handleHelp = (): void => {
-        const papercupsOn = featureFlagLogic.values.featureFlags['papercups-enabled']
+        const papercupsOn = false
         if (papercupsOn) {
             open()
         } else {

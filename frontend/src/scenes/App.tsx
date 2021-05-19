@@ -14,7 +14,6 @@ import { UpgradeModal } from './UpgradeModal'
 import { featureFlagLogic } from 'lib/logic/featureFlagLogic'
 import { preflightLogic } from './PreflightCheck/logic'
 import { BackTo } from 'lib/components/BackTo'
-import { Papercups } from 'lib/components/Papercups'
 
 function Toast(): JSX.Element {
     return <ToastContainer autoClose={8000} transition={Slide} position="top-right" />
@@ -80,7 +79,6 @@ export function App(): JSX.Element | null {
     const essentialElements = (
         // Components that should always be mounted inside Layout
         <>
-            {featureFlags['papercups-enabled'] && <Papercups />}
             <Toast />
         </>
     )
