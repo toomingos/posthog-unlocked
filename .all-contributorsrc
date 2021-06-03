@@ -1240,7 +1240,8 @@
       "profile": "https://github.com/tobiastornros",
       "contributions": [
         "bug",
-        "doc"
+        "doc",
+        "code"
       ]
     },
     {
@@ -1293,6 +1294,15 @@
       "name": "Johan Dufour",
       "avatar_url": "https://avatars.githubusercontent.com/u/568769?v=4",
       "profile": "https://larriereguichet.fr",
+      "contributions": [
+        "code"
+      ]
+    },
+    {
+      "login": "taobojlen",
+      "name": "Tao Bojlén",
+      "avatar_url": "https://avatars.githubusercontent.com/u/66130243?v=4",
+      "profile": "https://www.btao.org/",
       "contributions": [
         "code"
       ]
