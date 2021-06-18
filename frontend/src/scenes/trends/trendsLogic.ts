@@ -8,8 +8,6 @@ import {
     ACTIONS_LINE_GRAPH_CUMULATIVE,
     ACTIONS_LINE_GRAPH_LINEAR,
     ACTIONS_TABLE,
-    PAGEVIEW,
-    SCREEN,
     EVENT_TYPE,
     ACTION_TYPE,
     ShownAsValue,
@@ -17,12 +15,12 @@ import {
 import { ViewType, insightLogic, defaultFilterTestAccounts, TRENDS_BASED_INSIGHTS } from '../insights/insightLogic'
 import { insightHistoryLogic } from '../insights/InsightHistoryPanel/insightHistoryLogic'
 import { SESSIONS_WITH_RECORDINGS_FILTER } from 'scenes/sessions/filters/constants'
-import { ActionFilter, ActionType, FilterType, PersonType, PropertyFilter, TrendResult, EntityTypes } from '~/types'
+import { ActionFilter, FilterType, PersonType, PropertyFilter, TrendResult, EntityTypes, PathType } from '~/types'
 import { cohortLogic } from 'scenes/persons/cohortLogic'
 import { trendsLogicType } from './trendsLogicType'
 import { dashboardItemsModel } from '~/models/dashboardItemsModel'
-import { eventDefinitionsLogic } from 'scenes/events/eventDefinitionsLogic'
-import { propertyDefinitionsLogic } from 'scenes/events/propertyDefinitionsLogic'
+import { eventDefinitionsModel } from '~/models/eventDefinitionsModel'
+import { propertyDefinitionsModel } from '~/models/propertyDefinitionsModel'
 
 interface TrendResponse {
     result: TrendResult[]
@@ -124,7 +122,11 @@ function getDefaultFilters(currentFilters: Partial<FilterType>, eventNames: stri
     the first random event). We load this default events when `currentTeam` is loaded (because that's when
     `eventNames` become available) and on every view change (through the urlToAction map) */
     if (!currentFilters.actions?.length && !currentFilters.events?.length && eventNames.length) {
-        const event = eventNames.includes(PAGEVIEW) ? PAGEVIEW : eventNames.includes(SCREEN) ? SCREEN : eventNames[0]
+        const event = eventNames.includes(PathType.PageView)
+            ? PathType.PageView
+            : eventNames.includes(PathType.Screen)
+            ? PathType.Screen
+            : eventNames[0]
 
         const defaultFilters = {
             [EntityTypes.EVENTS]: [
@@ -144,9 +146,7 @@ function getDefaultFilters(currentFilters: Partial<FilterType>, eventNames: stri
 // props:
 // - dashboardItemId
 // - filters
-export const trendsLogic = kea<
-    trendsLogicType<TrendResponse, IndexedTrendResult, TrendResult, FilterType, ActionType, TrendPeople, PropertyFilter>
->({
+export const trendsLogic = kea<trendsLogicType<IndexedTrendResult, TrendPeople, TrendResponse>>({
     key: (props) => {
         return props.dashboardItemId || 'all_trends'
     },
@@ -284,11 +284,25 @@ export const trendsLogic = kea<
         visibilityMap: [
             {} as Record<number, any>,
             {
-                setVisibilityById: (state: Record<number, any>, { entry }: { entry: Record<number, any> }) => ({
+                setVisibilityById: (
+                    state: Record<number, any>,
+                    {
+                        entry,
+                    }: {
+                        entry: Record<number, any>
+                    }
+                ) => ({
                     ...state,
                     ...entry,
                 }),
-                toggleVisibility: (state: Record<number, any>, { index }: { index: number }) => ({
+                toggleVisibility: (
+                    state: Record<number, any>,
+                    {
+                        index,
+                    }: {
+                        index: number
+                    }
+                ) => ({
                     ...state,
                     [`${index}`]: !state[index],
                 }),
@@ -304,7 +318,7 @@ export const trendsLogic = kea<
 
     selectors: () => ({
         filtersLoading: [
-            () => [eventDefinitionsLogic.selectors.loaded, propertyDefinitionsLogic.selectors.loaded],
+            () => [eventDefinitionsModel.selectors.loaded, propertyDefinitionsModel.selectors.loaded],
             (eventsLoaded, propertiesLoaded): boolean => !eventsLoaded || !propertiesLoaded,
         ],
         results: [(selectors) => [selectors._results], (response) => response.result],
@@ -355,6 +369,10 @@ export const trendsLogic = kea<
                     filters: [...(params.filters || []), SESSIONS_WITH_RECORDINGS_FILTER],
                 })}`,
             }),
+        ],
+        numberOfSeries: [
+            (selectors) => [selectors.filters],
+            (filters): number => (filters.events?.length || 0) + (filters.actions?.length || 0),
         ],
     }),
 
@@ -499,8 +517,8 @@ export const trendsLogic = kea<
             })
             actions.setBreakdownValuesLoading(false)
         },
-        [eventDefinitionsLogic.actionTypes.loadEventDefinitionsSuccess]: async () => {
-            const newFilter = getDefaultFilters(values.filters, eventDefinitionsLogic.values.eventNames)
+        [eventDefinitionsModel.actionTypes.loadEventDefinitionsSuccess]: async () => {
+            const newFilter = getDefaultFilters(values.filters, eventDefinitionsModel.values.eventNames)
             const mergedFilter: Partial<FilterType> = {
                 ...values.filters,
                 ...newFilter,
@@ -567,7 +585,7 @@ export const trendsLogic = kea<
 
                 Object.assign(
                     cleanSearchParams,
-                    getDefaultFilters(cleanSearchParams, eventDefinitionsLogic.values.eventNames)
+                    getDefaultFilters(cleanSearchParams, eventDefinitionsModel.values.eventNames)
                 )
 
                 if (!objectsEqual(cleanSearchParams, values.filters)) {

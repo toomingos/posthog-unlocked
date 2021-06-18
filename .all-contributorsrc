@@ -1304,7 +1304,46 @@
       "avatar_url": "https://avatars.githubusercontent.com/u/66130243?v=4",
       "profile": "https://www.btao.org/",
       "contributions": [
+        "code",
+        "ideas"
+      ]
+    },
+    {
+      "login": "marcushyett-ph",
+      "name": "Marcus Hyett (PostHog)",
+      "avatar_url": "https://avatars.githubusercontent.com/u/85295485?v=4",
+      "profile": "https://github.com/marcushyett-ph",
+      "contributions": [
         "code"
+      ]
+    },
+    {
+      "login": "jonataslaw",
+      "name": "Jonny Borges",
+      "avatar_url": "https://avatars.githubusercontent.com/u/35742643?v=4",
+      "profile": "https://github.com/jonataslaw",
+      "contributions": [
+        "code"
+      ]
+    },
+    {
+      "login": "neilkakkar",
+      "name": "Neil Kakkar",
+      "avatar_url": "https://avatars.githubusercontent.com/u/7115141?v=4",
+      "profile": "http://neilkakkar.com",
+      "contributions": [
+        "test",
+        "bug"
+      ]
+    },
+    {
+      "login": "dbinetti",
+      "name": "David Binetti",
+      "avatar_url": "https://avatars.githubusercontent.com/u/161722?v=4",
+      "profile": "https://www.dbinetti.com",
+      "contributions": [
+        "doc",
+        "ideas"
       ]
     }
   ],

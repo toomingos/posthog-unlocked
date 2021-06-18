@@ -129,7 +129,7 @@ export function SelectUnit({
     items,
     disablePopover = false,
 }: {
-    dropdownLogic: selectBoxLogicType<SelectedItem, SelectBoxItem> & BuiltLogic
+    dropdownLogic: selectBoxLogicType & BuiltLogic
     items: Record<string, SelectBoxItem>
     disablePopover?: boolean // Disable PropertyKeyInfo popover
 }): JSX.Element {
@@ -140,9 +140,9 @@ export function SelectUnit({
     const [flattenedData, setFlattenedData] = useState<SelectedItem[]>([])
     const [groupTypes, setGroupTypes] = useState<string[]>([])
 
-    let lenghtOfData = 0
+    let lengthOfData = 0
     Object.values(items).forEach((entry) => {
-        lenghtOfData += entry.dataSource.length
+        lengthOfData += entry?.dataSource?.length || 0
     })
 
     useEffect(() => {
@@ -162,7 +162,7 @@ export function SelectUnit({
         setGroupTypes(_groupTypes)
         setData(formattedData)
         setHiddenData(_hiddenData)
-    }, [lenghtOfData])
+    }, [lengthOfData])
 
     useEffect(() => {
         const _flattenedData: SelectedItem[] = []
