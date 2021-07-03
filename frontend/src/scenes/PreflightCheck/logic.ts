@@ -36,11 +36,11 @@ export const preflightLogic = kea<preflightLogicType<PreflightMode>>({
         ],
         realm: [
             (s) => [s.preflight],
-            (preflight): 'cloud' | 'hosted' | null => {
+            (preflight): 'cloud' | 'hosted' | 'hosted-clickhouse' | null => {
                 if (!preflight) {
                     return null
                 }
-                return preflight.cloud ? 'cloud' : 'hosted'
+                return preflight.realm
             },
         ],
         siteUrlMisconfigured: [
@@ -106,16 +106,9 @@ export const preflightLogic = kea<preflightLogicType<PreflightMode>>({
         setPreflightMode: () => ['/preflight', { mode: values.preflightMode }],
     }),
     urlToAction: ({ actions }) => ({
-        '/preflight': (
-            _: any,
-            {
-                mode,
-            }: {
-                mode: PreflightMode | null
-            }
-        ) => {
+        '/preflight': (_, { mode }) => {
             if (mode) {
-                actions.setPreflightMode(mode, true)
+                actions.setPreflightMode(mode as PreflightMode, true)
             }
         },
     }),

@@ -76,6 +76,7 @@ PLUGINS_PREINSTALLED_URLS: List[str] = os.getenv(
 ).split(",") if not DISABLE_MMDB else []
 PLUGINS_CELERY_QUEUE = os.getenv("PLUGINS_CELERY_QUEUE", "posthog-plugins")
 PLUGINS_RELOAD_PUBSUB_CHANNEL = os.getenv("PLUGINS_RELOAD_PUBSUB_CHANNEL", "reload-plugins")
+PLUGIN_SERVER_ACTION_MATCHING = get_from_env("PLUGIN_SERVER_ACTION_MATCHING", 2, type_cast=int)
 
 # Tokens used when installing plugins, for example to get the latest commit SHA or to download private repositories.
 # Used mainly to get around API limits and only if no ?private_token=TOKEN found in the plugin URL.
@@ -216,7 +217,8 @@ STATSD_SEPARATOR = "_"
 CAPTURE_INTERNAL_METRICS = get_from_env("CAPTURE_INTERNAL_METRICS", False, type_cast=str_to_bool)
 
 # django-axes settings to lockout after too many attempts
-AXES_ENABLED = get_from_env("AXES_ENABLED", True, type_cast=str_to_bool)
+AXES_ENABLED = get_from_env("AXES_ENABLED", not TEST, type_cast=str_to_bool)
+AXES_HANDLER = "axes.handlers.cache.AxesCacheHandler"
 AXES_FAILURE_LIMIT = int(os.getenv("AXES_FAILURE_LIMIT", 5))
 AXES_COOLOFF_TIME = timedelta(minutes=15)
 AXES_LOCKOUT_CALLABLE = "posthog.api.authentication.axess_logout"
