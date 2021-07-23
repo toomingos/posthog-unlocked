@@ -1,12 +1,18 @@
 import React, { useState } from 'react'
 import { useActions, useMountedLogic, useValues, BindLogic } from 'kea'
 
-import { isMobile, Loading } from 'lib/utils'
+import { humanFriendlyDuration, isMobile, Loading } from 'lib/utils'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
 
 import { Tabs, Row, Col, Card, Button, Tooltip } from 'antd'
-import { FUNNEL_VIZ, ACTIONS_TABLE, ACTIONS_BAR_CHART_VALUE, FEATURE_FLAGS } from 'lib/constants'
+import {
+    FUNNEL_VIZ,
+    ACTIONS_TABLE,
+    ACTIONS_BAR_CHART_VALUE,
+    FEATURE_FLAGS,
+    FUNNELS_TIME_TO_CONVERT,
+} from 'lib/constants'
 import { annotationsLogic } from '~/lib/components/Annotations'
 import { router } from 'kea-router'
 
@@ -20,7 +26,7 @@ import { funnelLogic } from 'scenes/funnels/funnelLogic'
 import { insightLogic, logicFromInsight, ViewType } from './insightLogic'
 import { InsightHistoryPanel } from './InsightHistoryPanel'
 import { SavedFunnels } from './SavedCard'
-import { ReloadOutlined, DownOutlined, UpOutlined } from '@ant-design/icons'
+import { DownOutlined, UpOutlined } from '@ant-design/icons'
 import { insightCommandLogic } from './insightCommandLogic'
 
 import './Insights.scss'
@@ -36,6 +42,10 @@ import { InsightDisplayConfig } from './InsightTabs/InsightDisplayConfig'
 import { PageHeader } from 'lib/components/PageHeader'
 import { NPSPrompt } from 'lib/experimental/NPSPrompt'
 import { featureFlagLogic } from 'lib/logic/featureFlagLogic'
+import { PersonModal } from 'scenes/trends/PersonModal'
+import { SaveCohortModal } from 'scenes/trends/SaveCohortModal'
+import { personsModalLogic } from 'scenes/trends/personsModalLogic'
+import { preflightLogic } from 'scenes/PreflightCheck/logic'
 
 export interface BaseTabProps {
     annotationsToCreate: any[] // TODO: Type properly
@@ -64,6 +74,15 @@ export function Insights(): JSX.Element {
     } = useValues(insightLogic)
     const { setActiveView, toggleControlsCollapsed } = useActions(insightLogic)
     const { reportHotkeyNavigation } = useActions(eventUsageLogic)
+    const trendsLogicLoaded = trendsLogic({ dashboardItemId: null, view: activeView, filters: allFilters })
+    const { showingPeople } = useValues(trendsLogicLoaded)
+    const { refreshCohort, saveCohortWithFilters } = useActions(trendsLogicLoaded)
+    const { featureFlags } = useValues(featureFlagLogic)
+    const { preflight } = useValues(preflightLogic)
+    const { stepsWithCount, histogramStep } = useValues(funnelLogic())
+
+    const { cohortModalVisible } = useValues(personsModalLogic)
+    const { setCohortModalVisible } = useActions(personsModalLogic)
 
     const verticalLayout = activeView === ViewType.FUNNELS // Whether to display the control tab on the side instead of on top
 
@@ -100,6 +119,22 @@ export function Insights(): JSX.Element {
 
     return (
         <div className="insights-page">
+            <PersonModal
+                visible={showingPeople && !cohortModalVisible}
+                view={ViewType.FUNNELS}
+                onSaveCohort={() => {
+                    refreshCohort()
+                    setCohortModalVisible(true)
+                }}
+            />
+            <SaveCohortModal
+                visible={cohortModalVisible}
+                onOk={(title: string) => {
+                    saveCohortWithFilters(title)
+                    setCohortModalVisible(false)
+                }}
+                onCancel={() => setCohortModalVisible(false)}
+            />
             <PageHeader title="Insights" />
             <Row justify="space-between" align="middle" className="top-bar">
                 <Tabs
@@ -305,22 +340,31 @@ export function Insights(): JSX.Element {
                                 className="insights-graph-container"
                             >
                                 <div>
-                                    {lastRefresh && dayjs().subtract(3, 'minutes') > dayjs(lastRefresh) && (
-                                        <small style={{ position: 'absolute', marginTop: -21, right: 24 }}>
-                                            Computed {lastRefresh ? dayjs(lastRefresh).fromNow() : 'a while ago'}
-                                            <Button
-                                                size="small"
-                                                type="link"
-                                                onClick={() => loadResults(true)}
-                                                style={{ margin: 0 }}
-                                            >
-                                                refresh
-                                                <ReloadOutlined
-                                                    style={{ cursor: 'pointer', marginTop: -3, marginLeft: 3 }}
-                                                />
-                                            </Button>
-                                        </small>
-                                    )}
+                                    <Row style={{ justifyContent: 'space-between', marginTop: -8, marginBottom: 16 }}>
+                                        {allFilters.display === FUNNELS_TIME_TO_CONVERT && (
+                                            <div>
+                                                Average time:{' '}
+                                                <span className="l4" style={{ color: 'var(--primary)' }}>
+                                                    {humanFriendlyDuration(
+                                                        stepsWithCount[histogramStep]?.average_conversion_time
+                                                    )}
+                                                </span>
+                                            </div>
+                                        )}
+                                        {lastRefresh && dayjs().subtract(3, 'minutes') > dayjs(lastRefresh) && (
+                                            <div className="text-muted-alt" style={{ marginLeft: 'auto' }}>
+                                                Computed {lastRefresh ? dayjs(lastRefresh).fromNow() : 'a while ago'}
+                                                <Button
+                                                    size="small"
+                                                    type="link"
+                                                    onClick={() => loadResults(true)}
+                                                    style={{ margin: 0 }}
+                                                >
+                                                    <span style={{ fontSize: 14 }}>Refresh</span>
+                                                </Button>
+                                            </div>
+                                        )}
+                                    </Row>
                                     {showErrorMessage ? (
                                         <ErrorMessage />
                                     ) : (
@@ -349,7 +393,9 @@ export function Insights(): JSX.Element {
                                     </div>
                                 </div>
                             </Card>
-                            {!showErrorMessage &&
+                            {(!featureFlags[FEATURE_FLAGS.FUNNEL_BAR_VIZ] ||
+                                (featureFlags[FEATURE_FLAGS.FUNNEL_BAR_VIZ] && !preflight?.is_clickhouse_enabled)) &&
+                                !showErrorMessage &&
                                 !showTimeoutMessage &&
                                 activeView === ViewType.FUNNELS &&
                                 allFilters.display === FUNNEL_VIZ && (
@@ -391,16 +437,24 @@ function FunnelInsight(): JSX.Element {
         isValidFunnel,
         stepsWithCountLoading,
         filters: { display },
+        timeConversionBins,
     } = useValues(funnelLogic({}))
     const { featureFlags } = useValues(featureFlagLogic)
     const { autoCalculate } = useValues(funnelLogic())
     const fluidHeight = featureFlags[FEATURE_FLAGS.FUNNEL_BAR_VIZ] && display === FUNNEL_VIZ
+    const funnelHistogram = display === FUNNELS_TIME_TO_CONVERT
 
     return (
-        <div style={fluidHeight ? {} : { height: 300, position: 'relative' }}>
+        <div
+            style={
+                fluidHeight
+                    ? {}
+                    : { height: 300, position: 'relative', marginBottom: `${funnelHistogram ? '32px' : 0}` }
+            }
+        >
             {stepsWithCountLoading && <Loading />}
             {isValidFunnel ? (
-                <FunnelViz steps={stepsWithCount} />
+                <FunnelViz steps={stepsWithCount} timeConversionBins={timeConversionBins} />
             ) : (
                 !stepsWithCountLoading && (
                     <div

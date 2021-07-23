@@ -384,16 +384,14 @@ export interface EventFormattedType {
 
 export interface SessionType {
     distinct_id: string
-    event_count: number
-    events?: EventType[]
     global_session_id: string
     length: number
     start_time: string
     end_time: string
     session_recordings: SessionTypeSessionRecording[]
-    start_url?: string
-    end_url?: string
-    email?: string
+    start_url: string | null
+    end_url: string | null
+    email?: string | null
     matching_events: Array<number | string>
 }
 
@@ -489,6 +487,7 @@ export interface PluginType {
     is_global: boolean
     organization_id: string
     organization_name: string
+    metrics?: Record<string, StoredMetricMathOperations>
 }
 
 export interface PluginConfigType {
@@ -557,6 +556,7 @@ export enum ChartDisplayType {
     ActionsBarChartValue = 'ActionsBarValue',
     PathsViz = 'PathsViz',
     FunnelViz = 'FunnelViz',
+    FunnelsTimeToConvert = 'FunnelsTimeToConvert',
 }
 
 export type InsightType = 'TRENDS' | 'SESSIONS' | 'FUNNELS' | 'RETENTION' | 'PATHS' | 'LIFECYCLE' | 'STICKINESS'
@@ -603,6 +603,9 @@ export interface FilterType {
     formula?: any
     filter_test_accounts?: boolean
     from_dashboard?: boolean
+    funnel_step?: number
+    funnel_viz_type?: string // this and the below param is used for funnels time to convert, it'll be updated soon
+    funnel_to_step?: number
 }
 
 export interface SystemStatusSubrows {
@@ -680,12 +683,12 @@ export interface TrendResultWithAggregate extends TrendResult {
 
 export interface FunnelStep {
     action_id: string
-    average_time: number
+    average_conversion_time: number
     count: number
     name: string
     order: number
     people: string[]
-    type: string
+    type: EntityType
     labels?: string[]
 }
 
@@ -693,6 +696,13 @@ export interface FunnelResult {
     is_cached: boolean
     last_refresh: string | null
     result: FunnelStep[]
+    type: 'Funnel'
+}
+
+export interface FunnelsTimeConversionResult {
+    result: number[]
+    last_refresh: string | null
+    is_cached: boolean
     type: 'Funnel'
 }
 
@@ -883,3 +893,5 @@ export interface AppContext {
     current_user: UserType | null
     preflight: PreflightStatus
 }
+
+export type StoredMetricMathOperations = 'max' | 'min' | 'sum'

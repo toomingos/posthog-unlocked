@@ -136,7 +136,7 @@ class BreakdownValueMixin(BaseParamMixin):
 class InsightMixin(BaseParamMixin):
     @cached_property
     def insight(self) -> str:
-        return self._data.get(INSIGHT, INSIGHT_TRENDS)
+        return self._data.get(INSIGHT, INSIGHT_TRENDS).upper()
 
     @include_dict
     def insight_to_dict(self):
@@ -166,8 +166,8 @@ class SessionMixin(BaseParamMixin):
 class OffsetMixin(BaseParamMixin):
     @cached_property
     def offset(self) -> int:
-        _offset = self._data.get(OFFSET)
-        return int(_offset or "0")
+        offset_raw = self._data.get(OFFSET)
+        return int(offset_raw) if offset_raw else 0
 
     @include_dict
     def offset_to_dict(self):
