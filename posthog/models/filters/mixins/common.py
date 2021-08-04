@@ -10,6 +10,7 @@ from django.utils import timezone
 from posthog.constants import (
     ACTIONS,
     BREAKDOWN,
+    BREAKDOWN_LIMIT,
     BREAKDOWN_TYPE,
     BREAKDOWN_VALUE,
     COMPARE,
@@ -17,12 +18,14 @@ from posthog.constants import (
     DATE_TO,
     DISPLAY,
     EVENTS,
+    EXCLUSIONS,
     FILTER_TEST_ACCOUNTS,
     FORMULA,
     INSIGHT,
     INSIGHT_TO_DISPLAY,
     INSIGHT_TRENDS,
     INTERVAL,
+    LIMIT,
     OFFSET,
     SELECTOR,
     SESSION,
@@ -30,7 +33,7 @@ from posthog.constants import (
     TREND_FILTER_TYPE_ACTIONS,
     TREND_FILTER_TYPE_EVENTS,
 )
-from posthog.models.entity import Entity
+from posthog.models.entity import Entity, ExclusionEntity
 from posthog.models.filters.mixins.base import BaseParamMixin
 from posthog.models.filters.mixins.utils import cached_property, include_dict
 from posthog.utils import relative_date_parse, str_to_bool
@@ -108,9 +111,23 @@ class BreakdownMixin(BaseParamMixin):
         breakdown = self._data.get(BREAKDOWN)
         return self._process_breakdown_param(breakdown)
 
+    @cached_property
+    def _breakdown_limit(self) -> Optional[int]:
+        return self._data.get(BREAKDOWN_LIMIT)
+
+    @property
+    def breakdown_limit_or_default(self) -> int:
+        return self._breakdown_limit or 10
+
     @include_dict
     def breakdown_to_dict(self):
-        return {"breakdown": self.breakdown} if self.breakdown else {}
+        result = {}
+        if self.breakdown:
+            result[BREAKDOWN] = self.breakdown
+        if self._breakdown_limit:
+            result[BREAKDOWN_LIMIT] = self._breakdown_limit
+
+        return result
 
 
 class BreakdownTypeMixin(BaseParamMixin):
@@ -120,7 +137,7 @@ class BreakdownTypeMixin(BaseParamMixin):
 
     @include_dict
     def breakdown_type_to_dict(self):
-        return {"breakdown_type": self.breakdown_type} if self.breakdown_type else {}
+        return {BREAKDOWN_TYPE: self.breakdown_type} if self.breakdown_type else {}
 
 
 class BreakdownValueMixin(BaseParamMixin):
@@ -172,6 +189,17 @@ class OffsetMixin(BaseParamMixin):
     @include_dict
     def offset_to_dict(self):
         return {"offset": self.offset} if self.offset else {}
+
+
+class LimitMixin(BaseParamMixin):
+    @cached_property
+    def limit(self) -> Optional[int]:
+        limit = self._data.get(LIMIT, None)
+        return limit
+
+    @include_dict
+    def limit_to_dict(self):
+        return {"limit": self.limit} if self.limit else {}
 
 
 class CompareMixin(BaseParamMixin):
@@ -294,11 +322,22 @@ class EntitiesMixin(BaseParamMixin):
     def events(self) -> List[Entity]:
         return [entity for entity in self.entities if entity.type == TREND_FILTER_TYPE_EVENTS]
 
+    @cached_property
+    def exclusions(self) -> List[ExclusionEntity]:
+        _exclusions: List[ExclusionEntity] = []
+        if self._data.get(EXCLUSIONS):
+            exclusion_list = self._data.get(EXCLUSIONS, [])
+            if isinstance(exclusion_list, str):
+                exclusion_list = json.loads(exclusion_list)
+            _exclusions.extend([ExclusionEntity({**entity}) for entity in exclusion_list])
+        return _exclusions
+
     @include_dict
     def entities_to_dict(self):
         return {
             **({"events": [entity.to_dict() for entity in self.events]} if len(self.events) > 0 else {}),
             **({"actions": [entity.to_dict() for entity in self.actions]} if len(self.actions) > 0 else {}),
+            **({"exclusions": [entity.to_dict() for entity in self.exclusions]} if len(self.exclusions) > 0 else {}),
         }
 
 

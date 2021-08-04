@@ -1,9 +1,11 @@
+import inspect
 from typing import Any, Dict, Optional, Union
 
 from rest_framework.exceptions import ValidationError
 
 from posthog.constants import TREND_FILTER_TYPE_ACTIONS, TREND_FILTER_TYPE_EVENTS
 from posthog.models.action import Action
+from posthog.models.filters.mixins.funnel import FunnelFromToStepsMixin
 from posthog.models.filters.mixins.property import PropertyMixin
 
 
@@ -67,6 +69,16 @@ class Entity(PropertyMixin):
 
         return True
 
+    def is_superset(self, other) -> bool:
+        """ Checks if this entity is a superset version of other. The ids match and the properties of (this) is a subset of the properties of (other)"""
+
+        self_properties = sorted([str(prop) for prop in self.properties])
+        other_properties = sorted([str(prop) for prop in other.properties])
+
+        num_matched_props = sum([1 for x, y in zip(self_properties, other_properties) if x == y])
+
+        return self.id == other.id and num_matched_props == len(self_properties)
+
     def get_action(self) -> Action:
         if self.type != TREND_FILTER_TYPE_ACTIONS:
             raise ValueError(
@@ -76,3 +88,23 @@ class Entity(PropertyMixin):
             return Action.objects.get(id=self.id)
         except:
             raise ValidationError(f"Action ID {self.id} does not exist!")
+
+
+class ExclusionEntity(Entity, FunnelFromToStepsMixin):
+    """
+    Exclusion Entities represent Entities in Filter objects
+    with extra parameters for exclusion semantics.
+    """
+
+    def __init__(self, data: Dict[str, Any]) -> None:
+        super().__init__(data)
+
+    def to_dict(self) -> Dict[str, Any]:
+
+        ret = super().to_dict()
+
+        for _, func in inspect.getmembers(self, inspect.ismethod):
+            if hasattr(func, "include_dict"):  # provided by @include_dict decorator
+                ret.update(func())
+
+        return ret

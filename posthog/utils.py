@@ -56,10 +56,10 @@ __location__ = os.path.realpath(os.path.join(os.getcwd(), os.path.dirname(__file
 
 
 def format_label_date(date: datetime.datetime, interval: str) -> str:
-    labels_format = "%a. {day} %B"
+    labels_format = "%-d-%b-%Y"
     if interval == "hour" or interval == "minute":
-        labels_format += ", %H:%M"
-    return date.strftime(labels_format.format(day=date.day))
+        labels_format += " %H:%M"
+    return date.strftime(labels_format)
 
 
 def absolute_uri(url: Optional[str] = None) -> str:
@@ -220,9 +220,15 @@ def render_template(template_name: str, request: HttpRequest, context: Dict = {}
     # Set the frontend app context
     if not request.GET.get("no-preloaded-app-context"):
         from posthog.api.user import UserSerializer
+        from posthog.models import EventDefinition
         from posthog.views import preflight_check
 
-        posthog_app_context: Dict = {"current_user": None, "preflight": json.loads(preflight_check(request).getvalue())}
+        posthog_app_context: Dict = {
+            "current_user": None,
+            "preflight": json.loads(preflight_check(request).getvalue()),
+            "default_event_name": get_default_event_name(),
+            "persisted_feature_flags": settings.PERSISTED_FEATURE_FLAGS,
+        }
 
         if request.user.pk:
             user = UserSerializer(request.user, context={"request": request}, many=False)
@@ -234,6 +240,16 @@ def render_template(template_name: str, request: HttpRequest, context: Dict = {}
 
     html = template.render(context, request=request)
     return HttpResponse(html)
+
+
+def get_default_event_name():
+    from posthog.models import EventDefinition
+
+    if EventDefinition.objects.filter(name="$pageview").exists():
+        return "$pageview"
+    elif EventDefinition.objects.filter(name="$screen").exists():
+        return "$screen"
+    return "$pageview"
 
 
 def json_uuid_convert(o):
@@ -536,6 +552,39 @@ def get_instance_realm() -> str:
         return "hosted"
 
 
+def get_can_create_org() -> bool:
+    """Returns whether a new organization can be created in the current instance.
+
+    Organizations can be created only in the following cases:
+    - if on PostHog Cloud
+    - if running end-to-end tests
+    - if there's no organization yet
+    - if an appropriate license is active and MULTI_ORG_ENABLED is True
+    """
+    from posthog.models.organization import Organization
+
+    if (
+        settings.MULTI_TENANCY
+        or settings.E2E_TESTING
+        or not Organization.objects.filter(for_internal_metrics=False).exists()
+    ):
+        return True
+
+    if settings.MULTI_ORG_ENABLED:
+        try:
+            from ee.models.license import License
+        except ImportError:
+            pass
+        else:
+            license = License.objects.first_valid()
+            if license is not None and "organizations_projects" in license.available_features:
+                return True
+            else:
+                print_warning(["You have configured MULTI_ORG_ENABLED, but not the required premium PostHog plan!"])
+
+    return False
+
+
 def get_available_social_auth_providers() -> Dict[str, bool]:
     github: bool = bool(settings.SOCIAL_AUTH_GITHUB_KEY and settings.SOCIAL_AUTH_GITHUB_SECRET)
     gitlab: bool = bool(settings.SOCIAL_AUTH_GITLAB_KEY and settings.SOCIAL_AUTH_GITLAB_SECRET)
@@ -547,7 +596,6 @@ def get_available_social_auth_providers() -> Dict[str, bool]:
         if settings.MULTI_TENANCY:
             google = True
         else:
-
             try:
                 from ee.models.license import License
             except ImportError:

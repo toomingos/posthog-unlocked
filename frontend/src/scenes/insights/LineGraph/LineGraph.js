@@ -4,27 +4,25 @@ import { useActions, useValues } from 'kea'
 import Chart from '@posthog/chart.js'
 import 'chartjs-adapter-dayjs'
 import PropTypes from 'prop-types'
-import { formatLabel, compactNumber, lightenDarkenColor } from '~/lib/utils'
-import { getBarColorFromStatus, getChartColors } from 'lib/colors'
+import { compactNumber, lightenDarkenColor } from '~/lib/utils'
+import { getBarColorFromStatus, getChartColors, getGraphColors } from 'lib/colors'
 import { useWindowSize } from 'lib/hooks/useWindowSize'
 import { toast } from 'react-toastify'
 import { Annotations, annotationsLogic, AnnotationMarker } from 'lib/components/Annotations'
 import { useEscapeKey } from 'lib/hooks/useEscapeKey'
 import dayjs from 'dayjs'
-import { featureFlagLogic } from 'lib/logic/featureFlagLogic'
 import './LineGraph.scss'
 import { InsightLabel } from 'lib/components/InsightLabel'
-import { FEATURE_FLAGS } from 'lib/constants'
 import { InsightTooltip } from '../InsightTooltip'
 
 //--Chart Style Options--//
-// Chart.defaults.global.defaultFontFamily = "'PT Sans', sans-serif"
 Chart.defaults.global.legend.display = false
 Chart.defaults.global.animation.duration = 0
 Chart.defaults.global.elements.line.tension = 0
 //--Chart Style Options--//
 
 const noop = () => {}
+
 export function LineGraph({
     datasets,
     visibilityMap = null,
@@ -39,11 +37,10 @@ export function LineGraph({
     percentage = false,
     interval = undefined,
     totalValue,
+    showPersonsModal = true,
 }) {
     const chartRef = useRef()
     const myLineChart = useRef()
-    const { featureFlags } = useValues(featureFlagLogic)
-    const newUI = featureFlags[FEATURE_FLAGS.NEW_TOOLTIPS]
     const annotationsRoot = useRef()
     const [left, setLeft] = useState(-1)
     const [holdLeft, setHoldLeft] = useState(0)
@@ -68,22 +65,12 @@ export function LineGraph({
 
     const annotationsCondition =
         type === 'line' &&
-        datasets.length > 0 &&
+        datasets?.length > 0 &&
         !datasets[0].compare &&
         !inSharedMode &&
-        datasets[0].labels[0] !== '1 day' // stickiness graphs
+        datasets[0].labels?.[0] !== '1 day' // stickiness graphs
 
-    const colors = {
-        axisLabel: color === 'white' ? '#333' : 'rgba(255,255,255,0.8)',
-        axisLine: color === 'white' ? '#ddd' : 'rgba(255,255,255,0.2)',
-        axis: color === 'white' ? '#999' : 'rgba(255,255,255,0.6)',
-        crosshair: 'rgba(0,0,0,0.2)',
-        tooltipBackground: '#1dc9b7',
-        tooltipTitle: '#fff',
-        tooltipBody: '#fff',
-        annotationColor: color === 'white' ? null : 'white',
-        annotationAccessoryColor: color === 'white' ? null : 'black',
-    }
+    const colors = getGraphColors(color === 'white')
 
     useEscapeKey(() => setFocused(false), [focused])
 
@@ -154,9 +141,9 @@ export function LineGraph({
                 : undefined,
             backgroundColor: BACKGROUND_BASED_CHARTS.includes(type) ? mainColor : undefined,
             fill: false,
-            borderWidth: newUI ? 2 : 1,
-            pointRadius: newUI ? 0 : undefined,
-            pointHoverBorderWidth: newUI ? 2 : undefined,
+            borderWidth: 2,
+            pointRadius: 0,
+            pointHoverBorderWidth: 2,
             pointHitRadius: 8,
             ...dataset,
         }
@@ -175,9 +162,9 @@ export function LineGraph({
             datasets = [
                 ...datasets.map((dataset, index) => {
                     let datasetCopy = Object.assign({}, dataset)
-                    let data = [...dataset.data]
-                    let _labels = [...dataset.labels]
-                    let days = [...dataset.days]
+                    let data = [...(dataset.data || [])]
+                    let _labels = [...(dataset.labels || [])]
+                    let days = [...(dataset.days || [])]
                     data.pop()
                     _labels.pop()
                     days.pop()
@@ -188,7 +175,7 @@ export function LineGraph({
                 }),
                 ...datasets.map((dataset, index) => {
                     let datasetCopy = Object.assign({}, dataset)
-                    let datasetLength = datasetCopy.data.length
+                    let datasetLength = datasetCopy.data?.length ?? 0
                     datasetCopy.dotted = true
 
                     // if last date is still active show dotted line
@@ -220,9 +207,9 @@ export function LineGraph({
             precision: 0,
         }
 
-        const inspectUsersLabel = !dashboardItemId && onClick
+        const inspectUsersLabel = !dashboardItemId && onClick && showPersonsModal
 
-        const newUITooltipOptions = {
+        const tooltipOptions = {
             enabled: false, // disable builtin tooltip (use custom markup)
             mode: 'nearest',
             // If bar, we want to only show the tooltip for what we're hovering over
@@ -260,7 +247,6 @@ export function LineGraph({
 
                     // This could either be a color or an array of colors (`horizontalBar`)
                     const colorSet = entityData.backgroundColor || entityData.borderColor
-
                     return (
                         <InsightLabel
                             action={action}
@@ -271,7 +257,11 @@ export function LineGraph({
                             hasMultipleSeries={numberOfSeries > 1}
                             breakdownValue={
                                 entityData.breakdownValues // Used in `horizontalBar`
-                                    ? entityData.breakdownValues[tooltipItem.index]
+                                    ? entityData.breakdownValues[tooltipItem.index] === ''
+                                        ? 'None'
+                                        : entityData.breakdownValues[tooltipItem.index]
+                                    : entityData.breakdown_value === ''
+                                    ? 'None'
                                     : entityData.breakdown_value
                             }
                             seriesStatus={entityData.status}
@@ -348,62 +338,13 @@ export function LineGraph({
             },
         }
 
-        const tooltipOptions = newUI
-            ? newUITooltipOptions
-            : {
-                  enabled: true,
-                  intersect: false,
-                  mode: 'nearest',
-                  // If bar, we want to only show the tooltip for what we're hovering over
-                  // to avoid confusion
-                  axis: { bar: 'x', horizontalBar: 'y' }[type],
-                  bodySpacing: 5,
-                  position: 'nearest',
-                  yPadding: 10,
-                  xPadding: 10,
-                  caretPadding: 0,
-                  displayColors: false,
-                  backgroundColor: colors.tooltipBackground,
-                  titleFontColor: colors.tooltipTitle,
-                  bodyFontColor: colors.tooltipBody,
-                  footerFontColor: colors.tooltipBody,
-                  borderColor: colors.tooltipBorder,
-                  labelFontSize: 23,
-                  cornerRadius: 4,
-                  fontSize: 12,
-                  footerSpacing: 0,
-                  titleSpacing: 0,
-                  footerFontStyle: 'italic',
-                  callbacks: {
-                      label: function (tooltipItem, data) {
-                          let entityData = data.datasets[tooltipItem.datasetIndex]
-                          if (entityData.dotted && !(tooltipItem.index === entityData.data.length - 1)) {
-                              return null
-                          }
-                          const label = entityData.chartLabel || entityData.label || tooltipItem.label || ''
-                          const action =
-                              entityData.action || (entityData.actions && entityData.actions[tooltipItem.index])
-                          const formattedLabel = action ? formatLabel(label, action) : label
-
-                          let value = tooltipItem.yLabel.toLocaleString()
-                          if (type === 'horizontalBar') {
-                              const perc = Math.round((tooltipItem.xLabel / totalValue) * 100, 2)
-                              value = `${tooltipItem.xLabel.toLocaleString()} (${perc}%)`
-                          }
-                          return (formattedLabel ? formattedLabel + ' — ' : '') + value + (percentage ? '%' : '')
-                      },
-                      footer: () => (inspectUsersLabel ? 'Click to see users related to the datapoint' : ''),
-                  },
-                  itemSort: (a, b) => b.yLabel - a.yLabel,
-              }
-
         let options = {
             responsive: true,
             maintainAspectRatio: false,
             scaleShowHorizontalLines: false,
             tooltips: tooltipOptions,
             plugins:
-                newUI && type !== 'horizontalBar' && !datasets[0].status
+                type !== 'horizontalBar' && !datasets?.[0]?.status
                     ? {
                           crosshair: {
                               snap: {
@@ -425,9 +366,9 @@ export function LineGraph({
                           crosshair: false,
                       },
             hover: {
-                mode: newUI ? 'nearestX' : 'nearest',
+                mode: 'nearestX',
                 axis: 'xy',
-                intersect: !newUI,
+                intersect: false,
                 onHover(evt) {
                     if (onClick) {
                         const point = this.getElementAtEvent(evt)
@@ -544,10 +485,15 @@ export function LineGraph({
                 },
                 onClick: options.onClick,
             }
+        } else if (type === 'histogram') {
+            options = {
+                ...options,
+                barPercentage: 1,
+            }
         }
 
         myLineChart.current = new Chart(myChartRef, {
-            type,
+            type: type === 'histogram' ? 'bar' : type,
             data: { labels, datasets },
             options,
         })

@@ -16,6 +16,7 @@ import { BackTo } from 'lib/components/BackTo'
 
 import { appLogicType } from './AppType'
 import { models } from '~/models'
+import { FEATURE_FLAGS } from 'lib/constants'
 
 export const appLogic = kea<appLogicType>({
     actions: {
