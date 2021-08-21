@@ -1,5 +1,6 @@
 import React from 'react'
-import { Dropdown, Menu, Table, Tooltip } from 'antd'
+import { Dropdown, Menu, Skeleton, Table } from 'antd'
+import { Tooltip } from 'lib/components/Tooltip'
 import { useActions, useValues } from 'kea'
 import { IndexedTrendResult, trendsLogic } from 'scenes/trends/trendsLogic'
 import { PHCheckbox } from 'lib/components/PHCheckbox'
@@ -29,7 +30,7 @@ const CALC_COLUMN_LABELS: Record<CalcColumnState, string> = {
 }
 
 export function InsightsTable({ isLegend = true, showTotalCount = false }: InsightsTableProps): JSX.Element | null {
-    const { indexedResults, visibilityMap, filters } = useValues(trendsLogic)
+    const { indexedResults, visibilityMap, filters, resultsLoading } = useValues(trendsLogic)
     const { toggleVisibility } = useActions(trendsLogic)
     const { cohorts } = useValues(cohortsModel)
     const { reportInsightsTableCalcToggled } = useActions(eventUsageLogic)
@@ -39,10 +40,6 @@ export function InsightsTable({ isLegend = true, showTotalCount = false }: Insig
     const logic = insightsTableLogic({ hasMathUniqueFilter })
     const { calcColumnState } = useValues(logic)
     const { setCalcColumnState } = useActions(logic)
-
-    if (indexedResults.length === 0 || !indexedResults?.[0]?.data) {
-        return null
-    }
 
     const isSingleEntity = indexedResults.length === 1
     const colorList = getChartColors('white')
@@ -125,7 +122,7 @@ export function InsightsTable({ isLegend = true, showTotalCount = false }: Insig
         width: 200,
     })
 
-    if (indexedResults && indexedResults.length > 0) {
+    if (indexedResults?.length > 0) {
         const valueColumns: ColumnsType<IndexedTrendResult> = indexedResults[0].data.map(({}, index: number) => ({
             title: (
                 <DateDisplay
@@ -183,6 +180,10 @@ export function InsightsTable({ isLegend = true, showTotalCount = false }: Insig
             width: 120,
             align: 'center',
         })
+    }
+
+    if (resultsLoading) {
+        return <Skeleton active paragraph={{ rows: 4 }} />
     }
 
     return (

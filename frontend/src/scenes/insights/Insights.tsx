@@ -16,20 +16,21 @@ import { Paths } from 'scenes/paths/Paths'
 
 import { RetentionTab, SessionTab, TrendTab, PathTab, FunnelTab } from './InsightTabs'
 import { funnelLogic } from 'scenes/funnels/funnelLogic'
-import { insightLogic, logicFromInsight } from './insightLogic'
+import { insightLogic } from './insightLogic'
+import { logicFromInsight } from './utils'
 import { InsightHistoryPanel } from './InsightHistoryPanel'
 import { DownOutlined, UpOutlined, EditOutlined } from '@ant-design/icons'
 import { insightCommandLogic } from './insightCommandLogic'
 
 import './Insights.scss'
 import { ErrorMessage, TimeOut } from './EmptyStates'
-import { People } from 'scenes/funnels/People'
+import { People } from 'scenes/funnels/FunnelPeople'
 import { InsightsTable } from './InsightsTable'
 import { TrendInsight } from 'scenes/trends/Trends'
 import { trendsLogic } from 'scenes/trends/trendsLogic'
 import { FunnelVizType, HotKeys, ItemMode, ViewType } from '~/types'
 import { useKeyboardHotkeys } from 'lib/hooks/useKeyboardHotkeys'
-import { eventUsageLogic, InsightEventSource } from 'lib/utils/eventUsageLogic'
+import { DashboardEventSource, eventUsageLogic, InsightEventSource } from 'lib/utils/eventUsageLogic'
 import { InsightDisplayConfig } from './InsightTabs/InsightDisplayConfig'
 import { PageHeader } from 'lib/components/PageHeader'
 import { NPSPrompt } from 'lib/experimental/NPSPrompt'
@@ -221,7 +222,9 @@ export function Insights(): JSX.Element {
                             <Description
                                 item={insight}
                                 itemMode={insightMode}
-                                setItemMode={(mode, source) => setInsightMode({ mode, source })}
+                                setItemMode={(mode: ItemMode | null, source: DashboardEventSource | null) =>
+                                    setInsightMode({ mode, source })
+                                }
                                 triggerItemUpdate={updateInsight}
                                 descriptionInputRef={descriptionInputRef}
                             />
@@ -241,7 +244,7 @@ export function Insights(): JSX.Element {
                     </Col>
                 ) : (
                     <>
-                        <Col span={24} lg={verticalLayout ? 7 : undefined}>
+                        <Col span={24} lg={verticalLayout ? 8 : undefined}>
                             <Card
                                 className={`insight-controls${controlsCollapsed ? ' collapsed' : ''}`}
                                 onClick={() => controlsCollapsed && toggleControlsCollapsed()}
@@ -300,7 +303,7 @@ export function Insights(): JSX.Element {
                             </Card>
                             {activeView === ViewType.FUNNELS && <FunnelSecondaryTabs />}
                         </Col>
-                        <Col span={24} lg={verticalLayout ? 17 : undefined}>
+                        <Col span={24} lg={verticalLayout ? 16 : undefined}>
                             {/* TODO: extract to own file. Props: activeView, allFilters, showDateFilter, dateFilterDisabled, annotationsToCreate; lastRefresh, showErrorMessage, showTimeoutMessage, isLoading; ... */}
                             {/* These are filters that are reused between insight features. They
                                 each have generic logic that updates the url
@@ -363,15 +366,13 @@ export function Insights(): JSX.Element {
                                     </div>
                                 </div>
                             </Card>
-                            {(!featureFlags[FEATURE_FLAGS.FUNNEL_BAR_VIZ] ||
-                                (featureFlags[FEATURE_FLAGS.FUNNEL_BAR_VIZ] && !preflight?.is_clickhouse_enabled)) &&
+                            {!preflight?.is_clickhouse_enabled &&
                                 !showErrorMessage &&
                                 !showTimeoutMessage &&
                                 areFiltersValid &&
                                 activeView === ViewType.FUNNELS &&
                                 allFilters.display === FUNNEL_VIZ && <People />}
-                            {featureFlags[FEATURE_FLAGS.FUNNEL_BAR_VIZ] &&
-                                preflight?.is_clickhouse_enabled &&
+                            {preflight?.is_clickhouse_enabled &&
                                 activeView === ViewType.FUNNELS &&
                                 !showErrorMessage &&
                                 allFilters.funnel_viz_type === FunnelVizType.Steps && <FunnelStepTable />}

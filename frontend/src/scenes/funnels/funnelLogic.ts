@@ -28,14 +28,14 @@ import {
     FunnelConversionWindow,
     FunnelConversionWindowTimeUnit,
 } from '~/types'
-import { featureFlagLogic } from 'lib/logic/featureFlagLogic'
-import { FEATURE_FLAGS, FunnelLayout, BinCountAuto } from 'lib/constants'
+import { FunnelLayout, BinCountAuto } from 'lib/constants'
 import { preflightLogic } from 'scenes/PreflightCheck/logic'
 import { FunnelStepReference } from 'scenes/insights/InsightTabs/FunnelTab/FunnelStepReferencePicker'
 import { cleanBinResult, formatDisplayPercentage, getLastFilledStep, getReferenceStep } from './funnelUtils'
 import { personsModalLogic } from 'scenes/trends/personsModalLogic'
 import { router } from 'kea-router'
 import { getDefaultEventName } from 'lib/utils/getAppContext'
+import { dashboardsModel } from '~/models/dashboardsModel'
 
 function aggregateBreakdownResult(
     breakdownList: FunnelStep[][],
@@ -124,6 +124,11 @@ export const cleanFunnelParams = (filters: Partial<FilterType>, discardFiltersNo
             ? { funnel_step_breakdown: filters.funnel_step_breakdown }
             : {}),
         ...(filters.bin_count && filters.bin_count !== BinCountAuto ? { bin_count: filters.bin_count } : {}),
+        ...(filters.funnel_window_interval_unit
+            ? { funnel_window_interval_unit: filters.funnel_window_interval_unit }
+            : {}),
+        ...(filters.funnel_window_interval ? { funnel_window_interval: filters.funnel_window_interval } : {}),
+        ...(filters.funnel_order_type ? { funnel_order_type: filters.funnel_order_type } : {}),
         interval: autocorrectInterval(filters),
         breakdown: breakdownEnabled ? filters.breakdown || undefined : undefined,
         breakdown_type: breakdownEnabled ? filters.breakdown_type || undefined : undefined,
@@ -134,8 +139,16 @@ const isStepsEmpty = (filters: FilterType): boolean =>
     [...(filters.actions || []), ...(filters.events || [])].length === 0
 
 export const funnelLogic = kea<funnelLogicType>({
+    props: {} as {
+        dashboardItemId?: number
+        filters?: Partial<FilterType>
+        cachedResults?: any
+        preventLoading?: boolean
+        refresh?: boolean
+    },
+
     key: (props) => {
-        return props.dashboardItemId || 'some_funnel'
+        return props.dashboardItemId || 'insight_funnel'
     },
 
     actions: () => ({
@@ -159,46 +172,35 @@ export const funnelLogic = kea<funnelLogicType>({
         setStepReference: (stepReference: FunnelStepReference) => ({ stepReference }),
         changeHistogramStep: (from_step: number, to_step: number) => ({ from_step, to_step }),
         setIsGroupingOutliers: (isGroupingOutliers) => ({ isGroupingOutliers }),
-        setLastAppliedFilters: (filters: FilterType) => ({ filters }),
         setBinCount: (binCount: BinCountValue) => ({ binCount }),
     }),
 
     connect: {
         actions: [insightHistoryLogic, ['createInsight'], funnelsModel, ['loadFunnels']],
-        values: [preflightLogic, ['preflight']],
+        logic: [insightLogic],
     },
 
     loaders: ({ props, values }) => ({
         rawResults: [
-            EMPTY_FUNNEL_RESULTS as LoadedRawFunnelResults,
+            { ...EMPTY_FUNNEL_RESULTS, filters: {} } as LoadedRawFunnelResults,
             {
                 loadResults: async (refresh = false, breakpoint): Promise<LoadedRawFunnelResults> => {
+                    const { apiParams, eventCount, actionCount, interval, filters } = values
+
                     if (props.cachedResults && !refresh && values.filters === props.filters) {
-                        // TODO: cache timeConversionResults? how does this cachedResults work?
                         return {
                             results: props.cachedResults as FunnelStep[] | FunnelStep[][],
                             timeConversionResults: props.cachedResults as FunnelsTimeConversionBins,
+                            filters,
                         }
                     }
 
                     // Don't bother making any requests if filters aren't valid
                     if (!values.areFiltersValid) {
-                        return EMPTY_FUNNEL_RESULTS
-                    }
-
-                    // Don't load results if layout was the only thing changed
-                    if (
-                        equal(
-                            Object.assign({}, values.filters, { layout: undefined }),
-                            Object.assign({}, values.lastAppliedFilters, { layout: undefined })
-                        )
-                    ) {
-                        return values.rawResults
+                        return { ...EMPTY_FUNNEL_RESULTS, filters }
                     }
 
                     await breakpoint(250)
-
-                    const { apiParams, eventCount, actionCount, interval, histogramStep, filters, binCount } = values
 
                     async function loadFunnelResults(): Promise<FunnelResult<FunnelStep[] | FunnelStep[][]>> {
                         try {
@@ -228,16 +230,9 @@ export const funnelLogic = kea<funnelLogicType>({
 
                     async function loadBinsResults(): Promise<FunnelsTimeConversionBins> {
                         if (filters.funnel_viz_type === FunnelVizType.TimeToConvert) {
-                            // API specs (#5110) require neither funnel_{from|to}_step to be provided if querying
-                            // for all steps
-                            const isAllSteps = values.histogramStep.from_step === -1
-
                             const binsResult = await pollFunnel<FunnelsTimeConversionBins>({
                                 ...apiParams,
                                 ...(refresh ? { refresh } : {}),
-                                ...(!isAllSteps ? { funnel_from_step: histogramStep.from_step } : {}),
-                                ...(!isAllSteps ? { funnel_to_step: histogramStep.to_step } : {}),
-                                ...(binCount && binCount !== BinCountAuto ? { bin_count: binCount } : {}),
                             })
                             return cleanBinResult(binsResult.result)
                         }
@@ -245,7 +240,11 @@ export const funnelLogic = kea<funnelLogicType>({
                     }
 
                     const queryId = uuid()
+                    const dashboardItemId = props.dashboardItemId as number | undefined
+
                     insightLogic.actions.startQuery(queryId)
+                    dashboardsModel.actions.updateDashboardRefreshStatus(dashboardItemId, true, null)
+
                     try {
                         const [result, timeConversionResults] = await Promise.all([
                             loadFunnelResults(),
@@ -253,13 +252,19 @@ export const funnelLogic = kea<funnelLogicType>({
                         ])
                         breakpoint()
                         insightLogic.actions.endQuery(queryId, ViewType.FUNNELS, result.last_refresh)
-                        return { results: result.result, timeConversionResults }
+                        dashboardsModel.actions.updateDashboardRefreshStatus(
+                            dashboardItemId,
+                            false,
+                            result.last_refresh
+                        )
+                        return { results: result.result, timeConversionResults, filters }
                     } catch (e) {
                         if (!isBreakpoint(e)) {
                             insightLogic.actions.endQuery(queryId, ViewType.FUNNELS, null, e)
+                            dashboardsModel.actions.updateDashboardRefreshStatus(dashboardItemId, false, null)
                             console.error(e)
                         }
-                        return EMPTY_FUNNEL_RESULTS
+                        return { ...EMPTY_FUNNEL_RESULTS, filters }
                     }
                 },
             },
@@ -290,6 +295,9 @@ export const funnelLogic = kea<funnelLogicType>({
             {
                 funnel_window_interval_unit: FunnelConversionWindowTimeUnit.Day,
                 funnel_window_interval: 14,
+            } as {
+                funnel_window_interval_unit: FunnelConversionWindowTimeUnit
+                funnel_window_interval: number
             },
             {
                 setConversionWindow: (
@@ -322,12 +330,6 @@ export const funnelLogic = kea<funnelLogicType>({
                 setIsGroupingOutliers: (_, { isGroupingOutliers }) => isGroupingOutliers,
             },
         ],
-        lastAppliedFilters: [
-            (props.filters || {}) as FilterType,
-            {
-                setLastAppliedFilters: (_, { filters }) => filters,
-            },
-        ],
         binCount: [
             BinCountAuto as BinCountValue,
             {
@@ -339,7 +341,9 @@ export const funnelLogic = kea<funnelLogicType>({
     selectors: ({ props, selectors }) => ({
         isLoading: [(s) => [s.rawResultsLoading], (rawResultsLoading) => rawResultsLoading],
         results: [(s) => [s.rawResults], (rawResults) => rawResults.results],
+        resultsLoading: [(s) => [s.rawResultsLoading], (rawResultsLoading) => rawResultsLoading],
         timeConversionBins: [(s) => [s.rawResults], (rawResults) => rawResults.timeConversionResults],
+        lastAppliedFilters: [(s) => [s.rawResults], (rawResults) => rawResults.filters],
         peopleSorted: [
             () => [selectors.stepsWithCount, selectors.people],
             (steps, people) => {
@@ -379,10 +383,9 @@ export const funnelLogic = kea<funnelLogicType>({
         ],
         barGraphLayout: [() => [selectors.filters], ({ layout }): FunnelLayout => layout || FunnelLayout.vertical],
         clickhouseFeaturesEnabled: [
-            () => [featureFlagLogic.selectors.featureFlags, selectors.preflight],
+            () => [preflightLogic.selectors.preflight],
             // Controls auto-calculation of results and ability to break down values
-            (featureFlags, preflight): boolean =>
-                !!(featureFlags[FEATURE_FLAGS.FUNNEL_BAR_VIZ] && preflight?.is_clickhouse_enabled),
+            (preflight): boolean => !!preflight?.is_clickhouse_enabled,
         ],
         histogramGraphData: [
             () => [selectors.timeConversionBins],
@@ -470,8 +473,8 @@ export const funnelLogic = kea<funnelLogicType>({
             },
         ],
         apiParams: [
-            (s) => [s.filters, s.conversionWindow, featureFlagLogic.selectors.featureFlags],
-            (filters, conversionWindow, featureFlags) => {
+            (s) => [s.filters],
+            (filters) => {
                 /* TODO: Related to #4329. We're mixing `from_dashboard` as both which causes hard to manage code:
                     a) a boolean-based hash param to determine if the insight is saved in a dashboard (when viewing insights page)
                     b) dashboard ID passed as a filter in certain kind of insights when viewing in the dashboard page
@@ -482,9 +485,6 @@ export const funnelLogic = kea<funnelLogicType>({
                     ...(props.refresh ? { refresh: true } : {}),
                     ...(from_dashboard ? { from_dashboard } : {}),
                     ...cleanedParams,
-                    funnel_window_interval: conversionWindow.funnel_window_interval,
-                    funnel_window_interval_unit: conversionWindow.funnel_window_interval_unit,
-                    ...(!featureFlags[FEATURE_FLAGS.FUNNEL_BAR_VIZ] ? { breakdown: null, breakdown_type: null } : {}),
                 }
             },
         ],
@@ -596,8 +596,6 @@ export const funnelLogic = kea<funnelLogicType>({
 
     listeners: ({ actions, values, props }) => ({
         loadResultsSuccess: async () => {
-            actions.setLastAppliedFilters(values.filters)
-
             // load the old people table
             if (!values.clickhouseFeaturesEnabled) {
                 if ((values.stepsWithCount[0]?.people?.length ?? 0) > 0) {
@@ -606,19 +604,25 @@ export const funnelLogic = kea<funnelLogicType>({
             }
         },
         setFilters: ({ refresh }) => {
-            // FUNNEL_BAR_VIZ removes the calculate button on Clickhouse
-            // Query performance is suboptimal on psql
+            // No calculate button on Clickhouse, but query performance is suboptimal on psql
             const { clickhouseFeaturesEnabled } = values
             // If user started from empty state (<2 steps) and added a new step
             const shouldRefresh =
                 values.filters?.events?.length === 2 && values.lastAppliedFilters?.events?.length === 1
+            // If layout is the only thing that changes
+            const onlyLayoutChanged = equal(
+                Object.assign({}, values.filters, { layout: undefined }),
+                Object.assign({}, values.lastAppliedFilters, { layout: undefined })
+            )
 
-            if (refresh || shouldRefresh || clickhouseFeaturesEnabled) {
+            if (!onlyLayoutChanged && (refresh || shouldRefresh || clickhouseFeaturesEnabled)) {
                 actions.loadResults()
             }
             const cleanedParams = cleanFunnelParams(values.filters)
-            insightLogic.actions.setAllFilters(cleanedParams)
-            insightLogic.actions.setLastRefresh(null)
+            if (!props.dashboardItemId) {
+                insightLogic.actions.setAllFilters(cleanedParams)
+                insightLogic.actions.setLastRefresh(null)
+            }
         },
         saveFunnelInsight: async ({ name }) => {
             await api.create('api/insight', {
@@ -629,7 +633,9 @@ export const funnelLogic = kea<funnelLogicType>({
             actions.loadFunnels()
         },
         clearFunnel: async () => {
-            insightLogic.actions.setAllFilters({})
+            if (!props.dashboardItemId) {
+                insightLogic.actions.setAllFilters({})
+            }
         },
         [dashboardItemsModel.actionTypes.refreshAllDashboardItems]: (filters) => {
             if (props.dashboardItemId) {
@@ -649,13 +655,21 @@ export const funnelLogic = kea<funnelLogicType>({
             })
         },
         changeHistogramStep: async () => {
-            actions.loadResults()
+            // API specs (#5110) require neither funnel_{from|to}_step to be provided if querying
+            // for all steps
+            const isAllSteps = values.histogramStep.from_step === -1
+
+            actions.setFilters({
+                ...(!isAllSteps ? { funnel_from_step: values.histogramStep.from_step } : {}),
+                ...(!isAllSteps ? { funnel_to_step: values.histogramStep.to_step } : {}),
+            })
         },
         setBinCount: async () => {
-            actions.loadResults()
+            const { binCount } = values
+            actions.setFilters(binCount && binCount !== BinCountAuto ? { bin_count: binCount } : {})
         },
         setConversionWindow: async () => {
-            actions.loadResults()
+            actions.setFilters(values.conversionWindow)
         },
     }),
     actionToUrl: ({ values, props }) => ({
@@ -694,6 +708,13 @@ export const funnelLogic = kea<funnelLogicType>({
                     }
                     actions.setFilters(cleanedParams, true, false)
                 }
+            }
+        },
+    }),
+    events: ({ actions, values }) => ({
+        afterMount: () => {
+            if (values.areFiltersValid) {
+                actions.loadResults()
             }
         },
     }),

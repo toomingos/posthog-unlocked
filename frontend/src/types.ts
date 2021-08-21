@@ -174,6 +174,7 @@ export interface ActionStepType {
     text?: string
     url?: string
     url_matching?: ActionStepUrlMatching
+    isNew?: string
 }
 
 export interface ElementType {
@@ -387,6 +388,13 @@ export interface SavedFunnel extends InsightHistory {
 
 export type BinCountValue = number | typeof BinCountAuto
 
+// https://github.com/PostHog/posthog/blob/master/posthog/constants.py#L106
+export enum StepOrderValue {
+    STRICT = 'strict',
+    UNORDERED = 'unordered',
+    ORDERED = 'ordered',
+}
+
 export enum PersonsTabType {
     EVENTS = 'events',
     SESSIONS = 'sessions',
@@ -489,6 +497,8 @@ export interface DashboardType {
     creation_mode: 'default' | 'template' | 'duplicate'
     tags: string[]
 }
+
+export type DashboardLayoutSize = 'lg' | 'sm' | 'xs' | 'xxs'
 
 export interface OrganizationInviteType {
     id: string
@@ -623,8 +633,8 @@ export interface FilterType {
     insight?: InsightType
     display?: ChartDisplayType
     interval?: IntervalType
-    date_from?: string
-    date_to?: string
+    date_from?: string | null
+    date_to?: string | null
     properties?: PropertyFilter[]
     events?: Record<string, any>[]
     actions?: Record<string, any>[]
@@ -659,6 +669,9 @@ export interface FilterType {
     funnel_step_breakdown?: string | number[] | number | null // used in steps breakdown: persons modal
     compare?: boolean
     bin_count?: BinCountValue // used in time to convert: number of bins to show in histogram
+    funnel_window_interval_unit?: FunnelConversionWindowTimeUnit // minutes, days, weeks, etc. for conversion window
+    funnel_window_interval?: number | undefined // length of conversion window
+    funnel_order_type?: StepOrderValue
 }
 
 export interface SystemStatusSubrows {
@@ -760,7 +773,7 @@ export interface FunnelResult<ResultType = FunnelStep[]> {
 }
 
 export interface FunnelsTimeConversionBins {
-    bins: [number, number][] | []
+    bins: [number, number][]
     average_conversion_time: number
 }
 
@@ -809,6 +822,7 @@ export interface FunnelRequestParams extends FilterType {
 export interface LoadedRawFunnelResults {
     results: FunnelStep[] | FunnelStep[][]
     timeConversionResults: FunnelsTimeConversionBins
+    filters: Partial<FilterType>
 }
 
 export interface FunnelStepWithConversionMetrics extends FunnelStep {
