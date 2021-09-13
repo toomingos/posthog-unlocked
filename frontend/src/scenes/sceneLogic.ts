@@ -359,6 +359,7 @@ export const sceneLogic = kea<sceneLogicType<LoadedScene, Params, Scene, SceneCo
             } else {
                 featureAvailable = !!user.organization?.available_features.includes(featureKey)
             }
+            featureAvailable = true
             if (featureAvailable) {
                 featureAvailableCallback?.()
             } else {
