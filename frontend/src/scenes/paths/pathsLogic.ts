@@ -7,9 +7,6 @@ import { insightHistoryLogic } from 'scenes/insights/InsightHistoryPanel/insight
 import { pathsLogicType } from './pathsLogicType'
 import { FilterType, PathType, PropertyFilter, ViewType } from '~/types'
 import { dashboardItemsModel } from '~/models/dashboardItemsModel'
-import { propertyDefinitionsModel } from '~/models/propertyDefinitionsModel'
-import { featureFlagLogic } from 'lib/logic/featureFlagLogic'
-import { FEATURE_FLAGS } from 'lib/constants'
 import { dashboardsModel } from '~/models/dashboardsModel'
 
 export const pathOptionsToLabels = {
@@ -127,7 +124,11 @@ export const pathsLogic = kea<pathsLogicType<PathNode, PathResult>>({
         loadResults: () => {
             insightLogic.actions.setAllFilters({ ...cleanPathParams(values.filter), properties: values.properties })
             if (!props.dashboardItemId) {
-                actions.createInsight({ ...cleanPathParams(values.filter), properties: values.properties })
+                if (!insightLogic.values.insight.id) {
+                    actions.createInsight({ ...cleanPathParams(values.filter), properties: values.properties })
+                } else {
+                    insightLogic.actions.updateInsightFilters(values.filter)
+                }
             }
         },
         [dashboardItemsModel.actionTypes.refreshAllDashboardItems]: (filters: Record<string, any>) => {
@@ -183,10 +184,6 @@ export const pathsLogic = kea<pathsLogicType<PathNode, PathResult>>({
 
                 return Object.keys(result).length === 0 ? '' : result
             },
-        ],
-        filtersLoading: [
-            () => [featureFlagLogic.selectors.featureFlags, propertyDefinitionsModel.selectors.loaded],
-            (featureFlags, loaded) => !featureFlags[FEATURE_FLAGS.TAXONOMIC_PROPERTY_FILTER] && !loaded,
         ],
     },
     actionToUrl: ({ values, props }) => ({
