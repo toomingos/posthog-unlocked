@@ -1,17 +1,24 @@
 import re
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Type
 
 import pytz
+from django.conf import settings
 from django.contrib.postgres.fields import ArrayField
+from django.core.exceptions import ObjectDoesNotExist
 from django.core.validators import MinLengthValidator
 from django.db import models
 from django.dispatch.dispatcher import receiver
 
+from posthog.constants import AvailableFeature
 from posthog.helpers.dashboard_templates import create_dashboard_from_template
 from posthog.utils import GenericEmails
 
 from .dashboard import Dashboard
 from .utils import UUIDClassicModel, generate_random_token_project, sane_repr
+
+if TYPE_CHECKING:
+    from posthog.models.organization import OrganizationMembership
+    from posthog.models.user import User
 
 TEAM_CACHE: Dict[str, "Team"] = {}
 
@@ -21,7 +28,6 @@ TIMEZONES = [(tz, tz) for tz in pytz.common_timezones]
 DEPRECATED_ATTRS = (
     "plugins_opt_in",
     "opt_out_capture",
-    "users",
     "event_names",
     "event_names_with_usage",
     "event_properties",
@@ -106,6 +112,7 @@ class Team(UUIDClassicModel):
     )
     signup_token: models.CharField = models.CharField(max_length=200, null=True, blank=True)
     is_demo: models.BooleanField = models.BooleanField(default=False)
+    access_control: models.BooleanField = models.BooleanField(default=False)
     test_account_filters: models.JSONField = models.JSONField(default=list)
     timezone: models.CharField = models.CharField(max_length=240, choices=TIMEZONES, default="UTC")
     data_attributes: models.JSONField = models.JSONField(default=get_default_data_attributes)
@@ -114,10 +121,6 @@ class Team(UUIDClassicModel):
     plugins_opt_in: models.BooleanField = models.BooleanField(default=False)
     # DEPRECATED, DISUSED: replaced with env variable OPT_OUT_CAPTURE and User.anonymized_data
     opt_out_capture: models.BooleanField = models.BooleanField(default=False)
-    # DEPRECATED, DISUSED: now managing access in an Organization-centric way
-    users: models.ManyToManyField = models.ManyToManyField(
-        "User", blank=True, related_name="teams_deprecated_relationship"
-    )
     # DEPRECATED: in favor of `EventDefinition` model
     event_names: models.JSONField = models.JSONField(default=list)
     event_names_with_usage: models.JSONField = models.JSONField(default=list)
@@ -128,6 +131,40 @@ class Team(UUIDClassicModel):
 
     objects: TeamManager = TeamManager()
 
+    def get_effective_membership_level(self, user: "User") -> Optional["OrganizationMembership.Level"]:
+        """Return an effective membership level.
+        None returned if the user has no explicit membership and organization access is too low for implicit membership.
+        """
+        from posthog.models.organization import OrganizationMembership
+
+        try:
+            requesting_parent_membership: OrganizationMembership = OrganizationMembership.objects.select_related(
+                "organization"
+            ).get(organization_id=self.organization_id, user=user)
+        except OrganizationMembership.DoesNotExist:
+            return None
+        if (
+            not settings.EE_AVAILABLE
+            or not requesting_parent_membership.organization.is_feature_available(
+                AvailableFeature.PROJECT_BASED_PERMISSIONING
+            )
+            or not self.access_control
+        ):
+            return requesting_parent_membership.level
+        from ee.models import ExplicitTeamMembership
+
+        try:
+            return (
+                requesting_parent_membership.explicit_team_memberships.only("parent_membership", "level")
+                .get(team=self)
+                .effective_level
+            )
+        except ExplicitTeamMembership.DoesNotExist:
+            # Only organizations admins and above get implicit project membership
+            if requesting_parent_membership.level < OrganizationMembership.Level.ADMIN:
+                return None
+            return requesting_parent_membership.level
+
     def __str__(self):
         if self.name:
             return self.name
@@ -136,9 +173,3 @@ class Team(UUIDClassicModel):
         return str(self.pk)
 
     __repr__ = sane_repr("uuid", "name", "api_token")
-
-
-@receiver(models.signals.pre_delete, sender=Team)
-def team_deleted(sender, instance, **kwargs):
-    instance.event_set.all().delete()
-    instance.elementgroup_set.all().delete()

@@ -521,6 +521,7 @@ interface PropertyKeyInfoInterface {
     disablePopover?: boolean
     disableIcon?: boolean
     ellipsis?: boolean
+    className?: string
 }
 
 export function PropertyKeyTitle({ data }: { data: KeyMapping }): JSX.Element {
@@ -554,7 +555,14 @@ export function PropertyKeyDescription({ data, value }: { data: KeyMapping; valu
     )
 }
 
-export function getKeyMapping(value: string | PropertyFilterValue, type: 'event' | 'element'): KeyMapping | null {
+export function getKeyMapping(
+    value: string | PropertyFilterValue | undefined,
+    type: 'event' | 'element'
+): KeyMapping | null {
+    if (!value) {
+        return null
+    }
+
     value = `${value}` // convert to string
     let data = null
     if (value in keyMapping[type]) {
@@ -587,19 +595,30 @@ export function PropertyKeyInfo({
     disablePopover = false,
     disableIcon = false,
     ellipsis = true,
+    className = '',
 }: PropertyKeyInfoInterface): JSX.Element {
     value = `${value}` // convert to string
     const data = getKeyMapping(value, type)
     if (!data) {
         return (
-            <Typography.Text ellipsis={ellipsis} style={{ color: 'inherit', maxWidth: 400, ...style }} title={value}>
+            <Typography.Text
+                ellipsis={ellipsis}
+                style={{ color: 'inherit', maxWidth: 400, ...style }}
+                title={value}
+                className={className}
+            >
                 {value !== '' ? value : <i>(empty string)</i>}
             </Typography.Text>
         )
     }
     if (disableIcon) {
         return (
-            <Typography.Text ellipsis={ellipsis} style={{ color: 'inherit', maxWidth: 400 }} title={data.label}>
+            <Typography.Text
+                ellipsis={ellipsis}
+                style={{ color: 'inherit', maxWidth: 400 }}
+                title={data.label}
+                className={className}
+            >
                 {data.label !== '' ? data.label : <i>(empty string)</i>}
             </Typography.Text>
         )
@@ -621,7 +640,7 @@ export function PropertyKeyInfo({
         <Popover
             visible
             overlayStyle={{ zIndex: 99999 }}
-            overlayClassName="property-key-info-tooltip"
+            overlayClassName={`property-key-info-tooltip ${className || ''}`}
             placement={tooltipPlacement}
             title={popoverTitle}
             content={popoverContent}
@@ -631,7 +650,7 @@ export function PropertyKeyInfo({
     ) : (
         <Popover
             overlayStyle={{ zIndex: 99999 }}
-            overlayClassName="property-key-info-tooltip"
+            overlayClassName={`property-key-info-tooltip ${className || ''}`}
             align={ANTD_TOOLTIP_PLACEMENTS.horizontalPreferRight}
             title={popoverTitle}
             content={popoverContent}

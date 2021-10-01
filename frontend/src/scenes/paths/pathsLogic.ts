@@ -5,37 +5,48 @@ import { router } from 'kea-router'
 import { insightLogic } from 'scenes/insights/insightLogic'
 import { insightHistoryLogic } from 'scenes/insights/InsightHistoryPanel/insightHistoryLogic'
 import { pathsLogicType } from './pathsLogicType'
-import { FilterType, PathType, PropertyFilter, ViewType } from '~/types'
-import { dashboardItemsModel } from '~/models/dashboardItemsModel'
+import { SharedInsightLogicProps, FilterType, PathType, PropertyFilter, ViewType, AnyPropertyFilter } from '~/types'
 import { dashboardsModel } from '~/models/dashboardsModel'
+import { personsModalLogic } from 'scenes/trends/personsModalLogic'
+
+export const DEFAULT_STEP_LIMIT = 5
 
 export const pathOptionsToLabels = {
     [PathType.PageView]: 'Page views (Web)',
     [PathType.Screen]: 'Screen views (Mobile)',
-    [PathType.AutoCapture]: 'Autocaptured events',
     [PathType.CustomEvent]: 'Custom events',
 }
 
 export const pathOptionsToProperty = {
     [PathType.PageView]: '$current_url',
     [PathType.Screen]: '$screen_name',
-    [PathType.AutoCapture]: 'autocaptured_event',
     [PathType.CustomEvent]: 'custom_event',
 }
 
-function cleanPathParams(filters: Partial<FilterType>): Partial<FilterType> {
+export function cleanPathParams(filters: Partial<FilterType>): Partial<FilterType> {
     return {
-        start_point: filters.start_point,
-        path_type: filters.path_type || PathType.PageView,
+        start_point: filters.start_point || undefined,
+        end_point: filters.end_point || undefined,
+        step_limit: filters.step_limit || DEFAULT_STEP_LIMIT,
+        // TODO: use FF for path_type undefined
+        path_type: filters.path_type ? filters.path_type || PathType.PageView : undefined,
+        include_event_types: filters.include_event_types || (filters.funnel_filter ? [] : [PathType.PageView]),
+        path_groupings: filters.path_groupings || [],
+        exclude_events: filters.exclude_events || [],
+        ...(filters.include_event_types ? { include_event_types: filters.include_event_types } : {}),
         date_from: filters.date_from,
         date_to: filters.date_to,
         insight: ViewType.PATHS,
         ...(filters.filter_test_accounts ? { filter_test_accounts: filters.filter_test_accounts } : {}),
+        path_start_key: filters.path_start_key || undefined,
+        path_end_key: filters.path_end_key || undefined,
+        path_dropoff_key: filters.path_dropoff_key || undefined,
+        funnel_filter: filters.funnel_filter || {},
+        funnel_paths: filters.funnel_paths,
     }
 }
 
 const DEFAULT_PATH_LOGIC_KEY = 'default_path_key'
-
 interface PathResult {
     paths: PathNode[]
     filter: Partial<FilterType>
@@ -49,15 +60,34 @@ interface PathNode {
 }
 
 export const pathsLogic = kea<pathsLogicType<PathNode, PathResult>>({
+    props: {} as SharedInsightLogicProps,
     key: (props) => {
         return props.dashboardItemId || DEFAULT_PATH_LOGIC_KEY
     },
     connect: {
         actions: [insightHistoryLogic, ['createInsight']],
     },
+    actions: {
+        setProperties: (properties) => ({ properties }),
+        setFilter: (filter) => filter,
+        setCachedResults: (filters: Partial<FilterType>, results: any) => ({ filters, results }),
+        showPathEvents: (event) => ({ event }),
+        updateExclusions: (filters: AnyPropertyFilter[]) => ({ exclusions: filters.map(({ value }) => value) }),
+        openPersonsModal: (path_start_key?: string, path_end_key?: string, path_dropoff_key?: string) => ({
+            path_start_key,
+            path_end_key,
+            path_dropoff_key,
+        }),
+    },
     loaders: ({ values, props }) => ({
         results: {
             __default: { paths: [], filter: {} } as PathResult,
+            setCachedResults: ({ results, filters }) => {
+                return {
+                    paths: results,
+                    filters: filters,
+                }
+            },
             loadResults: async (refresh = false, breakpoint) => {
                 const filter = { ...values.filter, properties: values.properties }
                 if (!refresh && (props.cachedResults || props.preventLoading) && values.filter === props.filters) {
@@ -66,9 +96,11 @@ export const pathsLogic = kea<pathsLogicType<PathNode, PathResult>>({
                 const params = toParams({ ...filter, ...(refresh ? { refresh: true } : {}) })
 
                 const queryId = uuid()
-                const dashboardItemId = props.dashboardItemId as number | undefined
+                const dashboardItemId = props.dashboardItemId || props.fromDashboardItemId
                 insightLogic.actions.startQuery(queryId)
-                dashboardsModel.actions.updateDashboardRefreshStatus(dashboardItemId, true, null)
+                if (dashboardItemId) {
+                    dashboardsModel.actions.updateDashboardRefreshStatus(dashboardItemId, true, null)
+                }
 
                 let paths
                 try {
@@ -76,13 +108,17 @@ export const pathsLogic = kea<pathsLogicType<PathNode, PathResult>>({
                 } catch (e) {
                     breakpoint()
                     insightLogic.actions.endQuery(queryId, ViewType.PATHS, null, e)
-                    dashboardsModel.actions.updateDashboardRefreshStatus(dashboardItemId, false, null)
+                    if (dashboardItemId) {
+                        dashboardsModel.actions.updateDashboardRefreshStatus(dashboardItemId, false, null)
+                    }
 
                     return { paths: [], filter, error: true }
                 }
                 breakpoint()
                 insightLogic.actions.endQuery(queryId, ViewType.PATHS, paths.last_refresh)
-                dashboardsModel.actions.updateDashboardRefreshStatus(dashboardItemId, false, paths.last_refresh)
+                if (dashboardItemId) {
+                    dashboardsModel.actions.updateDashboardRefreshStatus(dashboardItemId, false, paths.last_refresh)
+                }
 
                 return { paths: paths.result, filter }
             },
@@ -91,18 +127,25 @@ export const pathsLogic = kea<pathsLogicType<PathNode, PathResult>>({
     reducers: ({ props }) => ({
         filter: [
             (props.filters
-                ? cleanPathParams(props.filters as Partial<FilterType>)
+                ? cleanPathParams(props.filters)
                 : (state: Record<string, any>) =>
-                      cleanPathParams(router.selectors.searchParams(state)) as Record<string, any>) as Partial<
-                FilterType
-            >,
+                      cleanPathParams(router.selectors.searchParams(state))) as Partial<FilterType>,
             {
                 setFilter: (state, filter) => ({ ...state, ...filter }),
+                showPathEvents: (state, { event }) => {
+                    if (state.include_event_types) {
+                        const include_event_types = state.include_event_types.includes(event)
+                            ? state.include_event_types.filter((e) => e !== event)
+                            : [...state.include_event_types, event]
+                        return { ...state, include_event_types }
+                    }
+                    return { ...state, include_event_types: [event] }
+                },
             },
         ],
         properties: [
             (props.filters
-                ? (props.filters as Partial<FilterType>).properties || []
+                ? props.filters.properties || []
                 : (state: Record<string, any>) =>
                       router.selectors.searchParams(state).properties || []) as PropertyFilter[],
             {
@@ -110,13 +153,12 @@ export const pathsLogic = kea<pathsLogicType<PathNode, PathResult>>({
             },
         ],
     }),
-    actions: () => ({
-        setProperties: (properties) => ({ properties }),
-        setFilter: (filter) => filter,
-    }),
     listeners: ({ actions, values, props }) => ({
         setProperties: () => {
             actions.loadResults(true)
+        },
+        updateExclusions: ({ exclusions }) => {
+            actions.setFilter({ exclude_events: exclusions })
         },
         setFilter: () => {
             actions.loadResults(true)
@@ -131,10 +173,15 @@ export const pathsLogic = kea<pathsLogicType<PathNode, PathResult>>({
                 }
             }
         },
-        [dashboardItemsModel.actionTypes.refreshAllDashboardItems]: (filters: Record<string, any>) => {
-            if (props.dashboardItemId) {
-                actions.setFilter(filters)
-            }
+        openPersonsModal: ({ path_start_key, path_end_key, path_dropoff_key }) => {
+            personsModalLogic.actions.loadPeople({
+                action: 'session', // relic from reusing Trend PersonModal
+                label: path_dropoff_key || path_start_key || path_end_key || 'Pageview',
+                date_from: '',
+                date_to: '',
+                pathsDropoff: Boolean(path_dropoff_key),
+                filters: { ...values.filter, path_start_key, path_end_key, path_dropoff_key },
+            })
         },
     }),
     selectors: {

@@ -1,13 +1,19 @@
-from typing import Any, Dict, Optional, cast
+from typing import TYPE_CHECKING, Any, Dict, Optional, cast
 
 from rest_framework.exceptions import AuthenticationFailed, NotFound, ValidationError
-from rest_framework_extensions.mixins import NestedViewSetMixin
+from rest_framework.viewsets import GenericViewSet
 from rest_framework_extensions.routers import ExtendedDefaultRouter
 from rest_framework_extensions.settings import extensions_api_settings
 
 from posthog.api.utils import get_token
 from posthog.models.organization import Organization
 from posthog.models.team import Team
+from posthog.models.user import User
+
+if TYPE_CHECKING:
+    _GenericViewSet = GenericViewSet
+else:
+    _GenericViewSet = object
 
 
 class DefaultRouterPlusPlus(ExtendedDefaultRouter):
@@ -18,7 +24,7 @@ class DefaultRouterPlusPlus(ExtendedDefaultRouter):
         self.trailing_slash = r"/?"
 
 
-class StructuredViewSetMixin(NestedViewSetMixin):
+class StructuredViewSetMixin(_GenericViewSet):
     # This flag disables nested routing handling, reverting to the old request.user.team behavior
     # Allows for a smoother transition from the old flat API structure to the newer nested one
     legacy_team_compatibility: bool = False
@@ -29,6 +35,10 @@ class StructuredViewSetMixin(NestedViewSetMixin):
 
     _parents_query_dict: Optional[Dict[str, Any]]
 
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        return self.filter_queryset_by_parents_lookups(queryset)
+
     @property
     def team_id(self) -> int:
         team_from_token = self._get_team_from_request()
@@ -36,7 +46,8 @@ class StructuredViewSetMixin(NestedViewSetMixin):
             return team_from_token.id
 
         if self.legacy_team_compatibility:
-            team = self.request.user.team
+            user = cast(User, self.request.user)
+            team = user.team
             assert team is not None
             return team.id
         return self.get_parents_query_dict()["team_id"]
@@ -47,11 +58,15 @@ class StructuredViewSetMixin(NestedViewSetMixin):
         if team_from_token:
             return team_from_token
 
+        user = cast(User, self.request.user)
         if self.legacy_team_compatibility:
-            team = self.request.user.team
+            team = user.team
             assert team is not None
             return team
-        return Team.objects.get(id=self.team_id)
+        try:
+            return Team.objects.get(id=self.team_id)
+        except Team.DoesNotExist:
+            raise NotFound(detail="Project not found.")
 
     @property
     def organization_id(self) -> str:
@@ -62,7 +77,10 @@ class StructuredViewSetMixin(NestedViewSetMixin):
 
     @property
     def organization(self) -> Organization:
-        return Organization.objects.get(id=self.organization_id)
+        try:
+            return Organization.objects.get(id=self.organization_id)
+        except Organization.DoesNotExist:
+            raise NotFound(detail="Organization not found.")
 
     def filter_queryset_by_parents_lookups(self, queryset):
         parents_query_dict = self.get_parents_query_dict()
@@ -107,12 +125,12 @@ class StructuredViewSetMixin(NestedViewSetMixin):
                     if query_lookup == "team_id":
                         project = self.request.user.team
                         if project is None:
-                            raise NotFound("Current project not found.")
+                            raise NotFound("Project not found.")
                         query_value = project.id
                     elif query_lookup == "organization_id":
                         organization = self.request.user.organization
                         if organization is None:
-                            raise NotFound("Current organization not found.")
+                            raise NotFound("Organization not found.")
                         query_value = organization.id
                 elif query_lookup == "team_id":
                     try:

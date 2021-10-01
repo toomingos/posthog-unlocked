@@ -53,7 +53,13 @@ export const ANTD_TOOLTIP_PLACEMENTS: Record<any, AlignType> = {
 
 export function uuid(): string {
     return '10000000-1000-4000-8000-100000000000'.replace(/[018]/g, (c) =>
-        (parseInt(c) ^ (crypto.getRandomValues(new Uint8Array(1))[0] & (15 >> (parseInt(c) / 4)))).toString(16)
+        (
+            parseInt(c) ^
+            ((typeof window?.crypto !== 'undefined' // in node tests, jsdom doesn't implement window.crypto
+                ? window.crypto.getRandomValues(new Uint8Array(1))[0]
+                : Math.floor(Math.random() * 256)) &
+                (15 >> (parseInt(c) / 4)))
+        ).toString(16)
     )
 }
 
@@ -64,6 +70,10 @@ export function areObjectValuesEmpty(obj: Record<string, any>): boolean {
 }
 
 export function toParams(obj: Record<string, any>): string {
+    if (!obj) {
+        return ''
+    }
+
     function handleVal(val: any): string {
         if (dayjs.isDayjs(val)) {
             return encodeURIComponent(val.format('YYYY-MM-DD'))
@@ -429,6 +439,11 @@ export function slugify(text: string): string {
         .replace(/--+/g, '-')
 }
 
+// Number to number with commas (e.g. 1234 -> 1,234)
+export function humanFriendlyNumber(d: number): string {
+    return d.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+}
+
 export function humanFriendlyDuration(d: string | number | null | undefined, maxUnits?: number): string {
     // Convert `d` (seconds) to a human-readable duration string.
     // Example: `1d 10hrs 9mins 8s`
@@ -477,9 +492,9 @@ export function humanFriendlyDetailedTime(date: dayjs.Dayjs | string | null, wit
         formatString = '[Yesterday] h:mm'
     }
     if (withSeconds) {
-        formatString += ':ss a'
+        formatString += ':ss A'
     } else {
-        formatString += ' a'
+        formatString += ' A'
     }
     return parsedDate.format(formatString)
 }
@@ -541,7 +556,8 @@ export function isURL(input: any): boolean {
         return false
     }
     // https://stackoverflow.com/questions/3809401/what-is-a-good-regular-expression-to-match-a-url
-    const regexp = /^\s*https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)/gi
+    const regexp =
+        /^\s*https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)/gi
     return !!input.match?.(regexp)
 }
 
@@ -550,7 +566,8 @@ export function isEmail(string: string): boolean {
         return false
     }
     // https://html.spec.whatwg.org/multipage/input.html#valid-e-mail-address
-    const regexp = /^[a-zA-Z0-9.!#$%&'*+\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/
+    const regexp =
+        /^[a-zA-Z0-9.!#$%&'*+\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/
     return !!string.match?.(regexp)
 }
 
@@ -1063,4 +1080,8 @@ export function validateJsonFormItem(_: any, value: string): Promise<string | vo
     } catch (error) {
         return Promise.reject('Not valid JSON!')
     }
+}
+
+export function ensureStringIsNotBlank(s?: string | null): string | null {
+    return typeof s === 'string' && s.trim() !== '' ? s : null
 }

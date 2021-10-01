@@ -26,10 +26,12 @@ interface Props {
 export function TrendInsight({ view }: Props): JSX.Element {
     const { cohortModalVisible } = useValues(personsModalLogic)
     const { setCohortModalVisible } = useActions(personsModalLogic)
-    const { filters: _filters, loadMoreBreakdownUrl, breakdownValuesLoading } = useValues(
-        trendsLogic({ dashboardItemId: null, view, filters: null })
-    )
-    const { loadMoreBreakdownValues } = useActions(trendsLogic({ dashboardItemId: null, view, filters: null }))
+    const {
+        filters: _filters,
+        loadMoreBreakdownUrl,
+        breakdownValuesLoading,
+    } = useValues(trendsLogic({ dashboardItemId: null, filters: null }))
+    const { loadMoreBreakdownValues } = useActions(trendsLogic({ dashboardItemId: null, filters: null }))
     const { showingPeople } = useValues(personsModalLogic)
     const { saveCohortWithFilters } = useActions(personsModalLogic)
     const { reportCohortCreatedFromPersonModal } = useActions(eventUsageLogic)

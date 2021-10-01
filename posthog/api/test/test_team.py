@@ -1,6 +1,8 @@
 from rest_framework import status
 
-from posthog.models.organization import Organization
+from posthog.demo import create_demo_team
+from posthog.models.organization import Organization, OrganizationMembership
+from posthog.models.session_recording_event import SessionRecordingEvent
 from posthog.models.team import Team
 from posthog.test.base import APIBaseTest
 
@@ -58,8 +60,7 @@ class TestTeamAPI(APIBaseTest):
             self.assertEqual(Team.objects.count(), 1)
 
     def test_retention_invalid_properties(self):
-        org = Organization.objects.create(name="New Org")
-        team = Team.objects.create(organization=org, name="Default Project")
+        _, _, team = Organization.objects.bootstrap(self.user, name="New Org")
 
         properties = "invalid_json"
         response = self.client.get(f"/api/projects/{team.pk}/actions/retention", data={"properties": properties})
@@ -118,3 +119,16 @@ class TestTeamAPI(APIBaseTest):
         response_data = response.json()
         self.assertEqual(response_data["name"], self.team.name)
         self.assertEqual(response_data["test_account_filters"], [{"key": "$current_url", "value": "test"}])
+
+    def test_delete_team_own_second(self):
+        self.organization_membership.level = OrganizationMembership.Level.ADMIN
+        self.organization_membership.save()
+
+        team = create_demo_team(organization=self.organization)
+
+        self.assertEqual(Team.objects.filter(organization=self.organization).count(), 2)
+
+        response = self.client.delete(f"/api/projects/{team.id}")
+
+        self.assertEqual(response.status_code, 204)
+        self.assertEqual(Team.objects.filter(organization=self.organization).count(), 1)
