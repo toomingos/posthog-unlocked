@@ -4,7 +4,7 @@ import { TableProps } from 'antd'
 import { FEATURE_FLAGS, FunnelLayout } from 'lib/constants'
 import { funnelLogic } from 'scenes/funnels/funnelLogic'
 import Table, { ColumnsType } from 'antd/lib/table'
-import { FlagOutlined } from '@ant-design/icons'
+import { FlagOutlined, UserOutlined, UserDeleteOutlined } from '@ant-design/icons'
 import { formatBreakdownLabel } from 'scenes/insights/InsightsTable/InsightsTable'
 import { cohortsModel } from '~/models/cohortsModel'
 import { IconSize, InsightLabel } from 'lib/components/InsightLabel'
@@ -49,6 +49,8 @@ export function FunnelStepTable(): JSX.Element | null {
         barGraphLayout,
         flattenedStepsByBreakdown,
         flattenedBreakdowns,
+        clickhouseFeaturesEnabled,
+        aggregationTargetLabel,
     } = useValues(logic)
     const { openPersonsModal, toggleVisibilityByBreakdown, setHiddenById } = useActions(logic)
     const { cohorts } = useValues(cohortsModel)
@@ -132,7 +134,7 @@ export function FunnelStepTable(): JSX.Element | null {
                         <InsightLabel
                             seriesColor={color}
                             fallbackName={formatBreakdownLabel(
-                                isOnlySeries ? 'Persons' : breakdown.breakdown_value,
+                                isOnlySeries ? `Unique ${aggregationTargetLabel.plural}` : breakdown.breakdown_value,
                                 cohorts
                             )}
                             hasMultipleSeries={steps.length > 1}
@@ -192,13 +194,21 @@ export function FunnelStepTable(): JSX.Element | null {
                                                 : breakdown.breakdown_value
                                         )
                                     }
+                                    disabled={!clickhouseFeaturesEnabled}
                                 >
                                     {breakdown.steps?.[step.order].count}
                                 </ValueInspectorButton>
                             ) : (
                                 EmptyValue
                             ),
-                            renderSubColumnTitle('Completed'),
+                            renderSubColumnTitle(
+                                <>
+                                    <UserOutlined
+                                        title={`Unique ${aggregationTargetLabel.plural} who completed this step`}
+                                    />{' '}
+                                    Completed
+                                </>
+                            ),
                             showLabels,
                             step,
                             dashboardItemId,
@@ -268,13 +278,21 @@ export function FunnelStepTable(): JSX.Element | null {
                                                     : breakdown.breakdown_value
                                             )
                                         }
+                                        disabled={!clickhouseFeaturesEnabled}
                                     >
                                         {breakdown.steps?.[step.order]?.droppedOffFromPrevious}
                                     </ValueInspectorButton>
                                 ) : (
                                     EmptyValue
                                 ),
-                                renderSubColumnTitle('Dropped'),
+                                renderSubColumnTitle(
+                                    <>
+                                        <UserDeleteOutlined
+                                            title={`Unique ${aggregationTargetLabel.plural} who dropped off on this step`}
+                                        />{' '}
+                                        Dropped
+                                    </>
+                                ),
                                 showLabels,
                                 step,
                                 dashboardItemId,
@@ -468,6 +486,7 @@ export function FunnelStepTable(): JSX.Element | null {
                                 step.isBreakdownParent ? undefined : step.breakdown_value
                             )
                         }
+                        disabled={!clickhouseFeaturesEnabled}
                     >
                         {step.count}
                     </ValueInspectorButton>
@@ -504,6 +523,7 @@ export function FunnelStepTable(): JSX.Element | null {
                                 step.isBreakdownParent ? undefined : step.breakdown_value
                             )
                         }
+                        disabled={!clickhouseFeaturesEnabled}
                     >
                         {step.droppedOffFromPrevious}
                     </ValueInspectorButton>
@@ -570,6 +590,7 @@ export function FunnelStepTable(): JSX.Element | null {
             pagination={{ pageSize: 100, hideOnSinglePage: true }}
             style={{ marginTop: '1rem' }}
             data-attr={isNewVertical ? 'funnel-bar-graph' : 'funnel-steps-table'}
+            className="funnel-steps-table"
         />
     ) : null
 }

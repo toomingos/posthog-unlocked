@@ -7,7 +7,7 @@ export function useOutsideClickHandler(
     handleClickOutside?: (event: Event) => void,
     extraDeps: any[] = []
 ): void {
-    const allRefs = (Array.isArray(refOrRefs) ? refOrRefs : [refOrRefs]).map((f) => f)
+    const allRefs = Array.isArray(refOrRefs) ? refOrRefs : [refOrRefs]
 
     useEffect(() => {
         function handleClick(event: Event): void {
@@ -21,9 +21,9 @@ export function useOutsideClickHandler(
         }
 
         if (allRefs.length > 0) {
-            // only attach event listeners if there's something to track
-            document.addEventListener('mousedown', handleClick)
-            return () => document.removeEventListener('mousedown', handleClick)
+            // Only attach event listeners if there's something to track
+            document.addEventListener('click', handleClick)
+            return () => document.removeEventListener('click', handleClick)
         }
     }, [...allRefs, ...extraDeps])
 }

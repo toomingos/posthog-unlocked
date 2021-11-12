@@ -1,4 +1,4 @@
-from typing import Optional, cast
+from typing import cast
 
 from django.conf import settings
 from django.db.models import Model
@@ -181,7 +181,7 @@ class TeamMemberLightManagementPermission(BasePermission):
 
     def has_permission(self, request, view) -> bool:
         try:
-            if request.resolver_match.url_name == "team-detail":
+            if request.resolver_match.url_name.startswith("team-"):
                 # /projects/ endpoint handling
                 team = view.get_object()
             else:

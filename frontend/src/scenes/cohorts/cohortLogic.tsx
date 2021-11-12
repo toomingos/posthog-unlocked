@@ -41,6 +41,7 @@ export const cohortLogic = kea<cohortLogicType>({
         cohort: CohortType
     },
     key: (props) => props.cohort.id || 'new',
+    path: (key) => ['scenes', 'cohorts', 'cohortLogic', key],
     connect: [cohortsModel],
 
     actions: () => ({
@@ -144,15 +145,11 @@ export const cohortLogic = kea<cohortLogicType>({
 
             try {
                 if (cohort.id !== 'new') {
-                    cohort = await api.update(
-                        'api/cohort/' + cohort.id + (filterParams ? '?' + filterParams : ''),
-                        cohortFormData
-                    )
-
+                    cohort = await api.cohorts.update(cohort.id, cohortFormData as Partial<CohortType>, filterParams)
                     cohortsModel.actions.updateCohort(cohort)
                 } else {
-                    cohort = await api.create('api/cohort' + (filterParams ? '?' + filterParams : ''), cohortFormData)
-                    cohortsModel.actions.createCohort(cohort)
+                    cohort = await api.cohorts.create(cohortFormData as Partial<CohortType>, filterParams)
+                    cohortsModel.actions.cohortCreated(cohort)
                 }
             } catch (error) {
                 errorToast(
@@ -183,7 +180,7 @@ export const cohortLogic = kea<cohortLogicType>({
             actions.checkIfFinishedCalculating(cohort)
         },
         fetchCohort: async ({ cohort }, breakpoint) => {
-            cohort = await api.get('api/cohort/' + cohort.id)
+            cohort = await api.cohorts.get(cohort.id)
             breakpoint()
             actions.checkIfFinishedCalculating(cohort)
         },

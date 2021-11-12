@@ -4,6 +4,7 @@ $funnel_canvas_background: #fafafa;
 
 .insights-page {
     .top-bar {
+        width: 100%;
         .ant-tabs,
         .ant-tabs-nav-list {
             width: 100%;
@@ -14,6 +15,7 @@ $funnel_canvas_background: #fafafa;
 
         .ant-tabs-tab {
             padding: 0; // More compact tabs to save vertical space
+            padding-bottom: 6px;
         }
     }
 
@@ -33,13 +35,15 @@ $funnel_canvas_background: #fafafa;
     }
 
     .ant-card-bordered {
-        @extend .mixin-base-bordered-card;
+        @extend %mixin-base-bordered-card;
     }
 
-    .hotkey {
-        margin-bottom: 0;
-        background-color: rgba($primary, 0.1) !important;
-        border-color: rgba($primary, 0.1) !important;
+    .ant-tabs-tab {
+        .hotkey {
+            margin-bottom: 0;
+            background-color: rgba($primary, 0.1) !important;
+            border-color: rgba($primary, 0.1) !important;
+        }
     }
 
     .ant-tabs-tab:not(.ant-tabs-tab-active):hover {
@@ -52,7 +56,6 @@ $funnel_canvas_background: #fafafa;
         overflow: visible;
         position: relative;
         margin-bottom: $default_spacing / 2;
-        border: 1px solid $border_light;
 
         .ant-card-body {
             padding: $default_spacing * 0.8 $default_spacing;
@@ -72,17 +75,12 @@ $funnel_canvas_background: #fafafa;
             .tabs-inner {
                 display: none;
             }
-
-            .collapse-control {
-                top: 50%;
-                transform: translateY(-50%);
-            }
         }
     }
 
     .insights-graph-container {
         .ant-card-head {
-            border: 1px solid $border;
+            border-bottom: 1px solid var(--border);
             min-height: unset;
             background-color: $bg_mid;
             padding-right: $default_spacing / 4;
@@ -118,9 +116,10 @@ $funnel_canvas_background: #fafafa;
 
     .insights-tab-actions {
         margin-left: auto;
-        padding: 0 1rem;
+        padding-left: 1rem;
         display: flex;
         flex-wrap: nowrap;
+        justify-content: flex-end;
 
         .btn-reset {
             color: rgba($danger, 0.8);
@@ -140,6 +139,27 @@ $funnel_canvas_background: #fafafa;
         border: 0;
         input::placeholder {
             color: $text_default;
+        }
+    }
+
+    .insight-metadata-description {
+        .field {
+            color: $text_muted_alt;
+            font-style: italic;
+        }
+    }
+
+    .insight-metadata-name {
+        .field {
+            font-size: 28px;
+            font-weight: 600;
+            line-height: 40px;
+        }
+    }
+
+    .insight-metadata-tags {
+        .ant-tag {
+            margin-top: 0 !important;
         }
     }
 }
@@ -213,6 +233,11 @@ $funnel_canvas_background: #fafafa;
             margin-top: $default_spacing / 2;
         }
     }
+}
+
+.trends-insights-container {
+    position: relative;
+    min-height: min(calc(90vh - 16rem), 36rem);
 }
 
 .funnel-insights-container {

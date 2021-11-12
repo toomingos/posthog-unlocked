@@ -1,6 +1,6 @@
 import json
 import re
-from datetime import datetime, tzinfo
+from datetime import datetime
 from typing import Any, Dict, Optional
 
 from dateutil import parser
@@ -20,7 +20,6 @@ from posthog.helpers.session_recording import preprocess_session_recording_event
 from posthog.models import Team
 from posthog.models.feature_flag import get_active_feature_flags
 from posthog.models.utils import UUIDT
-from posthog.settings import EVENTS_DEAD_LETTER_QUEUE_STATSD_METRIC
 from posthog.utils import cors_response, get_ip_address, is_clickhouse_enabled
 
 if is_clickhouse_enabled():
@@ -51,7 +50,16 @@ if is_clickhouse_enabled():
     def log_event(data: Dict, event_name: str, topic: str = KAFKA_EVENTS_PLUGIN_INGESTION,) -> None:
         if settings.DEBUG:
             print(f"Logging event {event_name} to Kafka topic {topic}")
-        KafkaProducer().produce(topic=topic, data=data)
+
+        # TODO: Handle Kafka being unavailable with exponential backoff retries
+        try:
+            KafkaProducer().produce(topic=topic, data=data)
+        except Exception as e:
+            capture_exception(e, {"data": data})
+            statsd.incr("capture_endpoint_log_event_error")
+
+            if settings.DEBUG:
+                print(f"Failed to produce event to Kafka topic {KAFKA_EVENTS_PLUGIN_INGESTION} with error:", e)
 
     def log_event_to_dead_letter_queue(
         raw_payload: Dict,
@@ -77,7 +85,7 @@ if is_clickhouse_enabled():
 
         try:
             KafkaProducer().produce(topic=topic, data=data)
-            statsd.incr(EVENTS_DEAD_LETTER_QUEUE_STATSD_METRIC)
+            statsd.incr(settings.EVENTS_DEAD_LETTER_QUEUE_STATSD_METRIC)
         except Exception as e:
             capture_exception(e)
             statsd.incr("events_dead_letter_queue_produce_error")

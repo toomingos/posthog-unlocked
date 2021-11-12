@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/explicit-module-boundary-types */
-import { ViewType } from '~/types'
+import { InsightType } from '~/types'
 
 export const urls = {
     default: () => '/',
@@ -8,12 +8,14 @@ export const urls = {
     dashboard: (id: string | number) => `/dashboard/${id}`,
     createAction: () => `/action`, // TODO: For consistency, this should be `/action/new`
     action: (id: string | number) => `/action/${id}`,
-    actions: () => '/actions',
+    actions: () => '/events/actions',
+    eventStats: () => '/events/stats',
+    eventPropertyStats: () => '/events/properties',
+    events: () => '/events',
     insights: () => '/insights',
-    insightView: (view: ViewType) => `/insights?insight=${view}`,
+    newInsight: (insight?: InsightType) => `/insights/new${insight ? `?insight=${encodeURIComponent(insight)}` : ``}`,
     insightRouter: (id: string) => `/i/${id}`,
     savedInsights: () => '/saved_insights',
-    events: () => '/events',
     sessions: () => '/sessions',
     sessionRecordings: () => '/recordings',
     person: (id: string) => `/person/${id}`,
@@ -28,18 +30,22 @@ export const urls = {
     projectSettings: () => '/project/settings',
     mySettings: () => '/me/settings',
     organizationSettings: () => '/organization/settings',
-    organizationBilling: () => '/organization/billing',
     organizationCreateFirst: () => '/organization/create',
-    instanceLicenses: () => '/instance/licenses',
-    systemStatus: () => '/instance/status',
-    systemStatusPage: (page: string) => `/instance/status/${page}`,
     // Onboarding / setup routes
     login: () => '/login',
+    passwordReset: () => '/reset',
+    passwordResetComplete: (userUuid: string, token: string) => `/reset/${userUuid}/${token}`,
     preflight: () => '/preflight',
     signup: () => '/signup',
     inviteSignup: (id: string) => `/signup/${id}`,
     personalization: () => '/personalization',
     ingestion: () => '/ingestion',
     onboardingSetup: () => '/setup',
-    home: () => '/home',
+    // Cloud only
+    organizationBilling: () => '/organization/billing',
+    billingSubscribed: () => '/organization/billing/subscribed',
+    // Self-hosted only
+    instanceLicenses: () => '/instance/licenses',
+    systemStatus: () => '/instance/status',
+    systemStatusPage: (page: string) => `/instance/status/${page}`,
 }

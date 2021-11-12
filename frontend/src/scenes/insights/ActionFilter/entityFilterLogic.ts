@@ -3,7 +3,7 @@ import { actionsModel } from '~/models/actionsModel'
 import { EntityTypes, FilterType, Entity, EntityType, ActionFilter, EntityFilter, AnyPropertyFilter } from '~/types'
 import { entityFilterLogicType } from './entityFilterLogicType'
 import { eventDefinitionsModel } from '~/models/eventDefinitionsModel'
-import { eventUsageLogic } from 'lib/utils/eventUsageLogic'
+import { eventUsageLogic, GraphSeriesAddedSource } from 'lib/utils/eventUsageLogic'
 
 export type LocalFilter = EntityFilter & {
     order: number
@@ -42,13 +42,10 @@ export interface EntityFilterProps {
     addFilterDefaultOptions?: Record<string, any>
 }
 
-// required props:
-// - filters
-// - setFilters
-// - typeKey
 export const entityFilterLogic = kea<entityFilterLogicType<BareEntity, EntityFilterProps, LocalFilter>>({
     props: {} as EntityFilterProps,
     key: (props) => props.typeKey,
+    path: (key) => ['scenes', 'insights', 'ActionFilter', 'entityFilterLogic', key],
     connect: {
         values: [actionsModel, ['actions']],
     },
@@ -63,6 +60,7 @@ export const entityFilterLogic = kea<entityFilterLogicType<BareEntity, EntityFil
             math: filter.math,
             math_property: filter.math_property,
             index: filter.index,
+            math_group_type_index: filter.math_group_type_index,
         }),
         updateFilter: (
             filter: EntityFilter & {
@@ -85,6 +83,7 @@ export const entityFilterLogic = kea<entityFilterLogicType<BareEntity, EntityFil
             index: filter.index,
         }),
         addFilter: true,
+        duplicateFilter: (filter: EntityFilter | ActionFilter) => ({ filter }),
         updateFilterProperty: (
             filter: Partial<EntityFilter> & {
                 index?: number
@@ -188,9 +187,9 @@ export const entityFilterLogic = kea<entityFilterLogicType<BareEntity, EntityFil
                 values.localFilters.map((filter, i) => (i === index ? { ...filter, properties } : filter))
             )
         },
-        updateFilterMath: async ({ math, math_property, index }) => {
+        updateFilterMath: async ({ index, ...mathProperties }) => {
             actions.setFilters(
-                values.localFilters.map((filter, i) => (i === index ? { ...filter, math, math_property } : filter))
+                values.localFilters.map((filter, i) => (i === index ? { ...filter, ...mathProperties } : filter))
             )
         },
         removeLocalFilter: async ({ index }) => {
@@ -202,26 +201,38 @@ export const entityFilterLogic = kea<entityFilterLogicType<BareEntity, EntityFil
         addFilter: async () => {
             const previousLength = values.localFilters.length
             const newLength = previousLength + 1
-            if (values.localFilters.length > 0) {
-                const lastFilter: LocalFilter = {
-                    ...values.localFilters[previousLength - 1],
-                    custom_name: undefined, // Remove custom name
+            const precedingEntity = values.localFilters[previousLength - 1] as LocalFilter | undefined
+            actions.setFilters([
+                ...values.localFilters,
+                {
+                    id: '$pageview',
+                    type: 'events',
+                    order: precedingEntity ? precedingEntity.order + 1 : 0,
+                    name: '$pageview',
+                    ...props.addFilterDefaultOptions,
+                },
+            ])
+            eventUsageLogic.actions.reportInsightFilterAdded(newLength, GraphSeriesAddedSource.Default)
+        },
+        duplicateFilter: async ({ filter }) => {
+            const previousLength = values.localFilters.length
+            const newLength = previousLength + 1
+            const order = filter.order ?? values.localFilters[previousLength - 1].order
+            const newFilters = [...values.localFilters]
+            for (const _filter of newFilters) {
+                // Because duplicate filters are inserted within the current filters we need to move over the remaining filers
+                if (_filter.order >= order + 1) {
+                    _filter.order = _filter.order + 1
                 }
-                const order = lastFilter.order + 1
-                actions.setFilters([...values.localFilters, { ...lastFilter, order }])
-                actions.setEntityFilterVisibility(order, values.entityFilterVisible[lastFilter.order])
-            } else {
-                actions.setFilters([
-                    {
-                        id: null,
-                        type: EntityTypes.NEW_ENTITY,
-                        order: 0,
-                        name: null,
-                        ...props.addFilterDefaultOptions,
-                    },
-                ])
             }
-            eventUsageLogic.actions.reportInsightFilterAdded(newLength)
+            newFilters.splice(order, 0, {
+                ...filter,
+                custom_name: undefined,
+                order: order + 1,
+            })
+            actions.setFilters(newFilters)
+            actions.setEntityFilterVisibility(order + 1, values.entityFilterVisible[order])
+            eventUsageLogic.actions.reportInsightFilterAdded(newLength, GraphSeriesAddedSource.Duplicate)
         },
         setFilters: async ({ filters }) => {
             if (typeof props.setFilters === 'function') {

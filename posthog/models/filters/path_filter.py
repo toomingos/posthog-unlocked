@@ -6,7 +6,6 @@ from posthog.constants import INSIGHT_PATHS
 from posthog.models.filters.base_filter import BaseFilter
 from posthog.models.filters.mixins.common import (
     BreakdownMixin,
-    BreakdownTypeMixin,
     DateMixin,
     EntitiesMixin,
     FilterTestAccountsMixin,
@@ -16,13 +15,16 @@ from posthog.models.filters.mixins.common import (
     OffsetMixin,
 )
 from posthog.models.filters.mixins.funnel import FunnelCorrelationMixin, FunnelPersonsStepMixin, FunnelWindowMixin
+from posthog.models.filters.mixins.groups import GroupsAggregationMixin
 from posthog.models.filters.mixins.paths import (
     ComparatorDerivedMixin,
     EndPointMixin,
     FunnelPathsMixin,
+    LocalPathCleaningFiltersMixin,
     PathGroupingMixin,
     PathLimitsMixin,
     PathPersonsMixin,
+    PathReplacementMixin,
     PathStepLimitMixin,
     PropTypeDerivedMixin,
     StartPointMixin,
@@ -45,7 +47,6 @@ class PathFilter(
     FilterTestAccountsMixin,
     DateMixin,
     BreakdownMixin,
-    BreakdownTypeMixin,
     EntitiesMixin,
     PathStepLimitMixin,
     FunnelPathsMixin,
@@ -53,10 +54,13 @@ class PathFilter(
     FunnelWindowMixin,
     FunnelPersonsStepMixin,
     PathGroupingMixin,
+    PathReplacementMixin,
+    LocalPathCleaningFiltersMixin,
     PathPersonsMixin,
     LimitMixin,
     OffsetMixin,
     PathLimitsMixin,
+    GroupsAggregationMixin,
     FunnelCorrelationMixin,  # Typing pain because ColumnOptimizer expects a uniform filter
     SimplifyFilterMixin,
     # TODO: proper fix for EventQuery abstraction

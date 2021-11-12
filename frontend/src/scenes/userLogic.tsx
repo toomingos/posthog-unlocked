@@ -2,13 +2,14 @@ import React from 'react'
 import { kea } from 'kea'
 import api from 'lib/api'
 import { userLogicType } from './userLogicType'
-import { UserType } from '~/types'
+import { AvailableFeature, OrganizationBasicType, UserType } from '~/types'
 import posthog from 'posthog-js'
 import { toast } from 'react-toastify'
 import { getAppContext } from 'lib/utils/getAppContext'
 import { teamLogic } from './teamLogic'
 
 export const userLogic = kea<userLogicType>({
+    path: ['scenes', 'userLogic'],
     connect: {
         values: [teamLogic, ['currentTeam']],
     },
@@ -21,6 +22,7 @@ export const userLogic = kea<userLogicType>({
     }),
     loaders: ({ values, actions }) => ({
         user: [
+            // TODO: Because we don't actually load the app until this request completes, `user` is never `null` (will help simplify checks across the app)
             null as UserType | null,
             {
                 loadUser: async () => {
@@ -80,6 +82,27 @@ export const userLogic = kea<userLogicType>({
                     posthog.register({
                         is_demo_project: teamLogic.values.currentTeam?.is_demo,
                     })
+
+                    if (user.team) {
+                        posthog.group('project', user.team.uuid, {
+                            id: user.team.id,
+                            uuid: user.team.uuid,
+                            name: user.team.name,
+                            ingested_event: user.team.ingested_event,
+                            is_demo: user.team.is_demo,
+                            timezone: user.team.timezone,
+                        })
+                    }
+
+                    if (user.organization) {
+                        posthog.group('organization', user.organization.id, {
+                            id: user.organization.id,
+                            name: user.organization.name,
+                            slug: user.organization.slug,
+                            created_at: user.organization.created_at,
+                            available_features: user.organization.available_features,
+                        })
+                    }
                 }
             }
         },
@@ -112,6 +135,25 @@ export const userLogic = kea<userLogicType>({
             window.location.href = destination || '/'
         },
     }),
+    selectors: {
+        hasAvailableFeature: [
+            (s) => [s.user],
+            (user) => {
+                return (feature: AvailableFeature) => !!user?.organization?.available_features.includes(feature)
+            },
+        ],
+        otherOrganizations: [
+            (s) => [s.user],
+            (user): OrganizationBasicType[] =>
+                user
+                    ? user.organizations
+                          .filter((organization) => organization.id !== user.organization?.id)
+                          .sort((orgA, orgB) =>
+                              orgA.id === user?.organization?.id ? -2 : orgA.name.localeCompare(orgB.name)
+                          )
+                    : [],
+        ],
+    },
     events: ({ actions }) => ({
         afterMount: () => {
             const preloadedUser = getAppContext()?.current_user

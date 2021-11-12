@@ -7,8 +7,10 @@ import { errorToast, toParams, uniqueBy } from 'lib/utils'
 import { eventDefinitionsModel } from '~/models/eventDefinitionsModel'
 import { keyMapping } from 'lib/components/PropertyKeyInfo'
 import { propertyDefinitionsModel } from '~/models/propertyDefinitionsModel'
+import { teamLogic } from '../../teamLogic'
 
 export const definitionDrawerLogic = kea<definitionDrawerLogicType>({
+    path: ['scenes', 'events', 'definitions', 'definitionDrawerLogic'],
     actions: () => ({
         openDrawer: (type: string, id: string) => ({ type, id }),
         setDrawerType: (type: string) => ({ type }),
@@ -71,7 +73,9 @@ export const definitionDrawerLogic = kea<definitionDrawerLogicType>({
                         orderBy: ['-timestamp'],
                         limit: 5,
                     })
-                    const events = await api.get(`api/event/?${eventsParams}`)
+                    const events = await api.get(
+                        `api/projects/${teamLogic.values.currentTeamId}/events/?${eventsParams}`
+                    )
                     if (values.type === 'property') {
                         actions.loadEventsSnippetSuccess(events.results)
                     }

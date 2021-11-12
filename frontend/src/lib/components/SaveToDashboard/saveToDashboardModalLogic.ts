@@ -6,9 +6,12 @@ import { eventUsageLogic } from 'lib/utils/eventUsageLogic'
 import { saveToDashboardModalLogicType } from './saveToDashboardModalLogicType'
 
 export const saveToDashboardModalLogic = kea<saveToDashboardModalLogicType>({
+    path: (key) => ['lib', 'components', 'SaveToDashboard', 'saveToDashboardModalLogic', key],
     props: {} as {
-        fromDashboard: boolean
+        id?: number
+        fromDashboard?: number
     },
+    key: ({ id }) => id || 'none',
     actions: {
         addNewDashboard: true,
         setDashboardId: (id: number) => ({ id }),
@@ -23,7 +26,7 @@ export const saveToDashboardModalLogic = kea<saveToDashboardModalLogicType>({
             (s) => [
                 s._dashboardId,
                 dashboardsModel.selectors.lastDashboardId,
-                dashboardsModel.selectors.dashboards,
+                dashboardsModel.selectors.nameSortedDashboards,
                 (_, props) => props.fromDashboard,
             ],
             (_dashboardId, lastDashboardId, dashboards, fromDashboard) =>

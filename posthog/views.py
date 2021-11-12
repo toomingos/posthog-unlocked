@@ -28,7 +28,9 @@ from posthog.utils import (
 )
 from posthog.version import VERSION
 
-ROBOTS_TXT_CONTENT = "User-agent: *\nDisallow: /"
+ROBOTS_TXT_CONTENT = (
+    "User-agent: *\nDisallow: /shared_dashboard/" if settings.MULTI_TENANCY else "User-agent: *\nDisallow: /"
+)
 
 
 def noop(*args, **kwargs) -> None:
@@ -92,6 +94,7 @@ def preflight_check(request: HttpRequest) -> JsonResponse:
         "realm": get_instance_realm(),
         "available_social_auth_providers": get_available_social_auth_providers(),
         "can_create_org": get_can_create_org(),
+        "email_service_available": is_email_available(with_absolute_urls=True),
     }
 
     if request.user.is_authenticated:
@@ -103,11 +106,11 @@ def preflight_check(request: HttpRequest) -> JsonResponse:
             "available_timezones": get_available_timezones_with_offsets(),
             "opt_out_capture": os.environ.get("OPT_OUT_CAPTURE", False),
             "posthog_version": VERSION,
-            "email_service_available": is_email_available(with_absolute_urls=True),
             "is_debug": settings.DEBUG,
             "is_event_property_usage_enabled": settings.ASYNC_EVENT_PROPERTY_USAGE,
             "licensed_users_available": get_licensed_users_available(),
             "site_url": settings.SITE_URL,
+            "instance_preferences": settings.INSTANCE_PREFERENCES,
         }
 
     return JsonResponse(response)

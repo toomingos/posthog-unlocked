@@ -1,6 +1,11 @@
 import datetime
 import json
-from typing import Dict, List, Literal, Optional, Union
+from typing import TYPE_CHECKING, Dict, List, Literal, Optional, Tuple, Union
+
+from posthog.models.property import Property
+
+if TYPE_CHECKING:
+    from posthog.models.entity import Entity
 
 from rest_framework.exceptions import ValidationError
 
@@ -9,8 +14,18 @@ from posthog.constants import (
     DISPLAY,
     DROP_OFF,
     ENTRANCE_PERIOD_START,
+    FUNNEL_CORRELATION_EVENT_EXCLUDE_PROPERTY_NAMES,
+    FUNNEL_CORRELATION_EVENT_NAMES,
+    FUNNEL_CORRELATION_EXCLUDE_EVENT_NAMES,
+    FUNNEL_CORRELATION_EXCLUDE_NAMES,
     FUNNEL_CORRELATION_NAMES,
+    FUNNEL_CORRELATION_PERSON_CONVERTED,
+    FUNNEL_CORRELATION_PERSON_ENTITY,
+    FUNNEL_CORRELATION_PERSON_LIMIT,
+    FUNNEL_CORRELATION_PERSON_OFFSET,
+    FUNNEL_CORRELATION_PROPERTY_VALUES,
     FUNNEL_CORRELATION_TYPE,
+    FUNNEL_CUSTOM_STEPS,
     FUNNEL_FROM_STEP,
     FUNNEL_LAYOUT,
     FUNNEL_ORDER_TYPE,
@@ -128,19 +143,39 @@ class FunnelPersonsStepMixin(BaseParamMixin):
         Specifies the step index within a funnel entities definition for which
         we want to get the `timestamp` for, per person.
         """
-        _step = int(self._data.get(FUNNEL_STEP, "0"))
-        if _step == 0:
+        _step_as_string = self._data.get(FUNNEL_STEP)
+
+        if _step_as_string is None:
             return None
-        return _step
+        return int(_step_as_string)
+
+    @cached_property
+    def funnel_custom_steps(self) -> List[int]:
+        """
+        Custom step numbers to get persons for. This overrides FunnelPersonsStepMixin::funnel_step
+        """
+        raw_steps = self._data.get(FUNNEL_CUSTOM_STEPS, [])
+        if isinstance(raw_steps, str):
+            return json.loads(raw_steps)
+
+        return raw_steps
 
     @include_dict
     def funnel_step_to_dict(self):
-        return {FUNNEL_STEP: self.funnel_step} if self.funnel_step else {}
+        result: dict = {}
+        if self.funnel_step is not None:
+            result[FUNNEL_STEP] = self.funnel_step
+        if self.funnel_custom_steps:
+            result[FUNNEL_CUSTOM_STEPS] = self.funnel_custom_steps
+        return result
 
 
 class FunnelPersonsStepBreakdownMixin(BaseParamMixin):
     @cached_property
     def funnel_step_breakdown(self) -> Optional[Union[str, int]]:
+        """
+        The breakdown value for which to get persons for.
+        """
         return self._data.get(FUNNEL_STEP_BREAKDOWN)
 
     @include_dict
@@ -231,8 +266,41 @@ class FunnelCorrelationMixin(BaseParamMixin):
         return None
 
     @cached_property
-    def correlation_property_names(self) -> Optional[List[str]]:
+    def correlation_property_names(self) -> List[str]:
+        # Person Property names for which to run Person Properties correlation
         property_names = self._data.get(FUNNEL_CORRELATION_NAMES, [])
+        if isinstance(property_names, str):
+            return json.loads(property_names)
+        return property_names
+
+    @cached_property
+    def correlation_property_exclude_names(self) -> List[str]:
+        # Person Property names to exclude from Person Properties correlation
+        property_names = self._data.get(FUNNEL_CORRELATION_EXCLUDE_NAMES, [])
+        if isinstance(property_names, str):
+            return json.loads(property_names)
+        return property_names
+
+    @cached_property
+    def correlation_event_names(self) -> List[str]:
+        # Event names for which to run EventWithProperties correlation
+        event_names = self._data.get(FUNNEL_CORRELATION_EVENT_NAMES, [])
+        if isinstance(event_names, str):
+            return json.loads(event_names)
+        return event_names
+
+    @cached_property
+    def correlation_event_exclude_names(self) -> List[str]:
+        # Exclude event names from Event correlation
+        property_names = self._data.get(FUNNEL_CORRELATION_EXCLUDE_EVENT_NAMES, [])
+        if isinstance(property_names, str):
+            return json.loads(property_names)
+        return property_names
+
+    @cached_property
+    def correlation_event_exclude_property_names(self) -> List[str]:
+        # Event Property names to exclude from EventWithProperties correlation
+        property_names = self._data.get(FUNNEL_CORRELATION_EVENT_EXCLUDE_PROPERTY_NAMES, [])
         if isinstance(property_names, str):
             return json.loads(property_names)
         return property_names
@@ -244,4 +312,94 @@ class FunnelCorrelationMixin(BaseParamMixin):
             result_dict[FUNNEL_CORRELATION_TYPE] = self.correlation_type
         if self.correlation_property_names:
             result_dict[FUNNEL_CORRELATION_NAMES] = self.correlation_property_names
+        if self.correlation_property_exclude_names:
+            result_dict[FUNNEL_CORRELATION_EXCLUDE_NAMES] = self.correlation_property_exclude_names
+        if self.correlation_event_names:
+            result_dict[FUNNEL_CORRELATION_EVENT_NAMES] = self.correlation_event_names
+        if self.correlation_event_exclude_names:
+            result_dict[FUNNEL_CORRELATION_EXCLUDE_EVENT_NAMES] = self.correlation_event_exclude_names
+        if self.correlation_event_exclude_property_names:
+            result_dict[FUNNEL_CORRELATION_EVENT_EXCLUDE_PROPERTY_NAMES] = self.correlation_event_exclude_property_names
+        return result_dict
+
+
+class FunnelCorrelationPersonsMixin(BaseParamMixin):
+    @cached_property
+    def correlation_person_entity(self) -> Optional["Entity"]:
+        # Used for event & event_with_properties correlations persons
+        from posthog.models.entity import Entity
+
+        raw_event = self._data.get(FUNNEL_CORRELATION_PERSON_ENTITY)
+        if isinstance(raw_event, str):
+            event = json.loads(raw_event)
+        else:
+            event = raw_event
+
+        return Entity(event) if event else None
+
+    @cached_property
+    def correlation_property_values(self) -> Optional[List[Property]]:
+        # Used for property correlations persons
+
+        _props = self._data.get(FUNNEL_CORRELATION_PROPERTY_VALUES)
+
+        if not _props:
+            return None
+
+        if isinstance(_props, str):
+            try:
+                loaded_props = json.loads(_props)
+            except json.decoder.JSONDecodeError:
+                raise ValidationError("Properties are unparsable!")
+        else:
+            loaded_props = _props
+
+        if isinstance(loaded_props, list):
+            _properties = []
+            for prop_params in loaded_props:
+                if isinstance(prop_params, Property):
+                    _properties.append(prop_params)
+                else:
+                    try:
+                        new_prop = Property(**prop_params)
+                        _properties.append(new_prop)
+                    except:
+                        continue
+            return _properties
+        return None
+
+    @cached_property
+    def correlation_person_limit(self) -> int:
+        limit = self._data.get(FUNNEL_CORRELATION_PERSON_LIMIT)
+        return int(limit) if limit else 0
+
+    @cached_property
+    def correlation_person_offset(self) -> int:
+        offset = self._data.get(FUNNEL_CORRELATION_PERSON_OFFSET)
+        return int(offset) if offset else 0
+
+    @cached_property
+    def correlation_persons_converted(self) -> Optional[bool]:
+        converted = self._data.get(FUNNEL_CORRELATION_PERSON_CONVERTED)
+        if not converted:
+            return None
+        if converted.lower() == "true":
+            return True
+        return False
+
+    @include_dict
+    def funnel_correlation_persons_to_dict(self):
+        result_dict: Dict = {}
+        if self.correlation_person_entity:
+            result_dict[FUNNEL_CORRELATION_PERSON_ENTITY] = self.correlation_person_entity.to_dict()
+        if self.correlation_property_values:
+            result_dict[FUNNEL_CORRELATION_PROPERTY_VALUES] = [
+                prop.to_dict() for prop in self.correlation_property_values
+            ]
+        if self.correlation_person_limit:
+            result_dict[FUNNEL_CORRELATION_PERSON_LIMIT] = self.correlation_person_limit
+        if self.correlation_person_offset:
+            result_dict[FUNNEL_CORRELATION_PERSON_OFFSET] = self.correlation_person_offset
+        if self.correlation_persons_converted is not None:
+            result_dict[FUNNEL_CORRELATION_PERSON_CONVERTED] = self.correlation_persons_converted
         return result_dict

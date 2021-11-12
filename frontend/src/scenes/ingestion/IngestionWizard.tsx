@@ -13,22 +13,11 @@ import { FrameworkPanel } from 'scenes/ingestion/panels/FrameworkPanel'
 import { FrameworkGrid } from 'scenes/ingestion/panels/FrameworkGrid'
 import { PlatformPanel } from 'scenes/ingestion/panels/PlatformPanel'
 import { eventUsageLogic } from 'lib/utils/eventUsageLogic'
+import { SceneExport } from 'scenes/sceneTypes'
 
-export function IngestionContainer({ children }: { children: React.ReactNode }): JSX.Element {
-    return (
-        <div
-            className="background"
-            style={{
-                display: 'flex',
-                height: 'calc(100vh - 50px)',
-                width: '100vw',
-                alignItems: 'center',
-                justifyContent: 'center',
-            }}
-        >
-            {children}
-        </div>
-    )
+export const scene: SceneExport = {
+    component: IngestionWizard,
+    logic: ingestionLogic,
 }
 
 export function IngestionWizard(): JSX.Element {
@@ -89,4 +78,19 @@ export function IngestionWizard(): JSX.Element {
     return <></>
 }
 
-export default IngestionWizard
+function IngestionContainer({ children }: { children: React.ReactNode }): JSX.Element {
+    return (
+        <div
+            className="background"
+            style={{
+                display: 'flex',
+                height: 'calc(100vh - 50px)',
+                width: '100vw',
+                alignItems: 'center',
+                justifyContent: 'center',
+            }}
+        >
+            {children}
+        </div>
+    )
+}

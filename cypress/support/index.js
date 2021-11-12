@@ -9,6 +9,13 @@ try {
     require('cypress-terminal-report/src/installLogsCollector')()
 } catch {}
 
+// Add console errors into cypress logs. This helps with failures in Github Actions which otherwise swallows them.
+// From: https://github.com/cypress-io/cypress/issues/300#issuecomment-688915086
+Cypress.on('window:before:load', (win) => {
+    cy.spy(win.console, 'error')
+    cy.spy(win.console, 'warn')
+})
+
 beforeEach(() => {
     if (Cypress.spec.specType === 'component') {
         // Freeze time to 2021.01.05 Noon UTC - this should be the same date regardless of timezone.
@@ -33,7 +40,7 @@ beforeEach(() => {
 beforeEach(() => {
     if (Cypress.spec.specType !== 'component') {
         // Make sure the insights page is actually loaded before running tests
-        cy.get('.insights-page').should('exist')
+        cy.get('.saved-insights').should('exist')
     }
 })
 

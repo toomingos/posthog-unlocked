@@ -5,7 +5,6 @@ import { navigationLogic } from './navigationLogic'
 import { IconBuilding, IconMenu } from 'lib/components/icons'
 import { userLogic } from 'scenes/userLogic'
 import { Badge } from 'lib/components/Badge'
-import { ChangelogModal } from '~/layout/ChangelogModal'
 import { router } from 'kea-router'
 import { Button, Card, Dropdown } from 'antd'
 import {
@@ -36,11 +35,16 @@ import { AvailableFeature, TeamBasicType, UserType } from '~/types'
 import { CreateInviteModalWithButton } from 'scenes/organization/Settings/CreateInviteModal'
 import { preflightLogic } from 'scenes/PreflightCheck/logic'
 import { billingLogic } from 'scenes/billing/billingLogic'
-import { OrganizationMembershipLevel } from 'lib/constants'
+import { FEATURE_FLAGS } from 'lib/constants'
 import { ProfilePicture } from 'lib/components/ProfilePicture'
 import { Tooltip } from 'lib/components/Tooltip'
 import { teamLogic } from 'scenes/teamLogic'
 import { organizationLogic } from 'scenes/organizationLogic'
+import { featureFlagLogic } from '../../lib/logic/featureFlagLogic'
+import { TopBar } from '../lemonade/TopBar'
+import { HelpButton } from 'lib/components/HelpButton/HelpButton'
+import { CommandPalette } from '../../lib/components/CommandPalette'
+import { RedesignOptIn } from '../lemonade/RedesignOptIn'
 
 export function WhoAmI({ user }: { user: UserType }): JSX.Element {
     return (
@@ -101,37 +105,28 @@ function ProjectRow({ team }: { team: TeamBasicType }): JSX.Element {
     )
 }
 
-export function TopNavigation(): JSX.Element {
-    const {
-        setMenuCollapsed,
-        setChangelogModalOpen,
-        setInviteMembersModalOpen,
-        setProjectModalShown,
-        setOrganizationModalShown,
-    } = useActions(navigationLogic)
+function TopNavigationOriginal(): JSX.Element {
+    const { setMenuCollapsed, setInviteMembersModalOpen, setProjectModalShown, setOrganizationModalShown } =
+        useActions(navigationLogic)
     const {
         menuCollapsed,
         systemStatus,
         updateAvailable,
-        changelogModalOpen,
         inviteMembersModalOpen,
         projectModalShown,
         organizationModalShown,
     } = useValues(navigationLogic)
     const { currentTeam } = useValues(teamLogic)
-    const { user } = useValues(userLogic)
+    const { user, otherOrganizations } = useValues(userLogic)
     const { preflight } = useValues(preflightLogic)
     const { billing } = useValues(billingLogic)
-    const { currentOrganization } = useValues(organizationLogic)
+    const { currentOrganization, isProjectCreationForbidden } = useValues(organizationLogic)
     const { logout, updateCurrentOrganization } = useActions(userLogic)
     const { guardAvailableFeature } = useActions(sceneLogic)
     const { sceneConfig } = useValues(sceneLogic)
     const { showPalette } = useActions(commandPaletteLogic)
 
     const isCurrentProjectRestricted = currentTeam && !currentTeam.effective_membership_level
-    const isProjectCreationForbidden =
-        !currentOrganization?.membership_level ||
-        currentOrganization.membership_level < OrganizationMembershipLevel.Admin
 
     const whoAmIDropdown = (
         <div className="navigation-top-dropdown whoami-dropdown">
@@ -145,7 +140,7 @@ export function TopNavigation(): JSX.Element {
             {preflight?.cloud && billing?.should_display_current_bill && (
                 <Link to={urls.organizationBilling()} data-attr="top-menu-billing-usage">
                     <Card
-                        bodyStyle={{ padding: 4, fontWeight: 'bold' }}
+                        bodyStyle={{ padding: '8px 16px', fontWeight: 'bold' }}
                         style={{ marginBottom: 16, cursor: 'pointer' }}
                     >
                         <span className="text-small text-muted">
@@ -203,24 +198,17 @@ export function TopNavigation(): JSX.Element {
             </LinkButton>
             {
                 <div className="organizations">
-                    {user?.organizations
-                        .sort((orgA, orgB) =>
-                            orgA.id === user?.organization?.id ? -2 : orgA.name.localeCompare(orgB.name)
-                        )
-                        .map(
-                            (organization) =>
-                                organization.id !== user.organization?.id && (
-                                    <button
-                                        type="button"
-                                        className="plain-button"
-                                        key={organization.id}
-                                        onClick={() => updateCurrentOrganization(organization.id)}
-                                    >
-                                        <IconBuilding className="mr-05" style={{ width: 14 }} />
-                                        {organization.name}
-                                    </button>
-                                )
-                        )}
+                    {otherOrganizations.map((organization) => (
+                        <button
+                            type="button"
+                            className="plain-button"
+                            key={organization.id}
+                            onClick={() => updateCurrentOrganization(organization.id)}
+                        >
+                            <IconBuilding className="mr-05" style={{ width: 14 }} />
+                            {organization.name}
+                        </button>
+                    ))}
                     {preflight?.can_create_org && (
                         <button
                             type="button"
@@ -295,7 +283,7 @@ export function TopNavigation(): JSX.Element {
     return (
         <>
             <div className="navigation-spacer" />
-            <div className={`navigation-top${sceneConfig.plain ? ' full-width' : ''}`}>
+            <div className={`navigation-top${sceneConfig?.plain ? ' full-width' : ''}`}>
                 <div style={{ justifyContent: 'flex-start' }}>
                     <div className="hide-gte-lg menu-toggle" onClick={() => setMenuCollapsed(!menuCollapsed)}>
                         <IconMenu />
@@ -322,13 +310,21 @@ export function TopNavigation(): JSX.Element {
                             </Link>
                         )}
                         {!preflight?.cloud && (
-                            <Badge
-                                data-attr="update-indicator-badge"
-                                type={updateAvailable ? 'warning' : undefined}
-                                tooltip={updateAvailable ? 'New version available' : 'PostHog is up-to-date'}
-                                icon={<UpOutlined />}
-                                onClick={() => setChangelogModalOpen(true)}
-                            />
+                            <a
+                                href={`https://posthog.com/blog/the-posthog-array-${preflight?.posthog_version?.replace(
+                                    /\./g,
+                                    '-'
+                                )}`}
+                                target="_blank"
+                                rel="noopener"
+                            >
+                                <Badge
+                                    data-attr="update-indicator-badge"
+                                    type={updateAvailable ? 'warning' : undefined}
+                                    tooltip={updateAvailable ? 'New version available' : 'PostHog is up-to-date'}
+                                    icon={<UpOutlined />}
+                                />
+                            </a>
                         )}
                     </div>
                 </div>
@@ -351,6 +347,8 @@ export function TopNavigation(): JSX.Element {
                         </div>
                     </Dropdown>
                 </div>
+                <RedesignOptIn />
+                <HelpButton />
                 {user && (
                     <>
                         <Dropdown
@@ -366,9 +364,18 @@ export function TopNavigation(): JSX.Element {
                 )}
             </div>
             <BulkInviteModal visible={inviteMembersModalOpen} onClose={() => setInviteMembersModalOpen(false)} />
-            <CreateProjectModal isVisible={projectModalShown} setIsVisible={setProjectModalShown} />
-            <CreateOrganizationModal isVisible={organizationModalShown} setIsVisible={setOrganizationModalShown} />
-            {changelogModalOpen && <ChangelogModal onDismiss={() => setChangelogModalOpen(false)} />}
+            <CreateProjectModal isVisible={projectModalShown} onClose={() => setProjectModalShown(false)} />
+            <CreateOrganizationModal
+                isVisible={organizationModalShown}
+                onClose={() => setOrganizationModalShown(false)}
+            />
+            <CommandPalette />
         </>
     )
+}
+
+export function TopNavigation(): JSX.Element {
+    const { featureFlags } = useValues(featureFlagLogic)
+
+    return featureFlags[FEATURE_FLAGS.LEMONADE] ? <TopBar /> : <TopNavigationOriginal />
 }

@@ -59,6 +59,7 @@ export function SessionRecordingsButton({ sessionRecordings, source }: SessionRe
                     </div>
                 )
             },
+
             [sessionRecordings, setAreRecordingsShown]
         )
 

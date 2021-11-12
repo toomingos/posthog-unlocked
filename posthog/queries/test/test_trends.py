@@ -3,7 +3,14 @@ from typing import List, Tuple
 
 from freezegun import freeze_time
 
-from posthog.constants import TREND_FILTER_TYPE_EVENTS, TRENDS_BAR_VALUE, TRENDS_LIFECYCLE, TRENDS_TABLE
+from posthog.constants import (
+    ENTITY_ID,
+    ENTITY_TYPE,
+    TREND_FILTER_TYPE_EVENTS,
+    TRENDS_BAR_VALUE,
+    TRENDS_LIFECYCLE,
+    TRENDS_TABLE,
+)
 from posthog.models import (
     Action,
     ActionStep,
@@ -26,6 +33,16 @@ from posthog.utils import generate_cache_key, relative_date_parse
 def trend_test_factory(trends, event_factory, person_factory, action_factory, cohort_factory):
     class TestTrends(AbstractTimerangeTest, AbstractIntervalTest, APIBaseTest):
         maxDiff = None
+
+        def _get_trend_people(self, filter: Filter, entity: Entity):
+            data = filter.to_dict()
+            if data.get("events", None):
+                data.update({"events": json.dumps(data["events"])})
+            response = self.client.get(
+                f"/api/projects/{self.team.id}/actions/people/",
+                data={**data, ENTITY_TYPE: entity.type, ENTITY_ID: entity.id,},
+            ).json()
+            return response["results"][0]["people"]
 
         def _create_events(self, use_time=False) -> Tuple[Action, Person]:
 
@@ -97,19 +114,6 @@ def trend_test_factory(trends, event_factory, person_factory, action_factory, co
                         team=self.team, event="sign up", distinct_id="blabla", properties={"$some_property": i},
                     )
             sign_up_action = action_factory(team=self.team, name="sign up")
-
-        def assertEntityResponseEqual(self, response1, response2, remove=("action", "label")):
-            if len(response1):
-                for attr in remove:
-                    response1[0].pop(attr)
-            else:
-                return False
-            if len(response2):
-                for attr in remove:
-                    response2[0].pop(attr)
-            else:
-                return False
-            self.assertDictEqual(response1[0], response2[0])
 
         def test_trends_per_day(self):
             self._create_events()
@@ -576,7 +580,11 @@ def trend_test_factory(trends, event_factory, person_factory, action_factory, co
                     )
             else:
                 response = trends().run(Filter(data={**filter_params, "events": [{"id": "event_name"}]}), self.team,)
-            self.assertEqual(response, result)
+
+            self.assertEqual(result[0]["count"], response[0]["count"])
+            self.assertEqual(result[0]["data"], response[0]["data"])
+            self.assertEqual(result[0]["labels"], response[0]["labels"])
+            self.assertEqual(result[0]["days"], response[0]["days"])
 
         def test_minute_interval(self):
             self._test_events_with_dates(
@@ -594,6 +602,7 @@ def trend_test_factory(trends, event_factory, person_factory, action_factory, co
                             "custom_name": None,
                             "math": None,
                             "math_property": None,
+                            "math_group_type_index": None,
                             "properties": [],
                         },
                         "label": "event_name",
@@ -645,6 +654,7 @@ def trend_test_factory(trends, event_factory, person_factory, action_factory, co
                             "custom_name": None,
                             "math": None,
                             "math_property": None,
+                            "math_group_type_index": None,
                             "properties": [],
                         },
                         "label": "event_name",
@@ -688,6 +698,7 @@ def trend_test_factory(trends, event_factory, person_factory, action_factory, co
                             "custom_name": None,
                             "math": None,
                             "math_property": None,
+                            "math_group_type_index": None,
                             "properties": [],
                         },
                         "label": "event_name",
@@ -731,6 +742,7 @@ def trend_test_factory(trends, event_factory, person_factory, action_factory, co
                             "custom_name": None,
                             "math": None,
                             "math_property": None,
+                            "math_group_type_index": None,
                             "properties": [],
                         },
                         "label": "event_name",
@@ -758,6 +770,7 @@ def trend_test_factory(trends, event_factory, person_factory, action_factory, co
                             "custom_name": None,
                             "math": None,
                             "math_property": None,
+                            "math_group_type_index": None,
                             "properties": [],
                         },
                         "label": "event_name",
@@ -785,6 +798,7 @@ def trend_test_factory(trends, event_factory, person_factory, action_factory, co
                             "custom_name": None,
                             "math": None,
                             "math_property": None,
+                            "math_group_type_index": None,
                             "properties": [],
                         },
                         "label": "event_name",
@@ -812,6 +826,7 @@ def trend_test_factory(trends, event_factory, person_factory, action_factory, co
                             "custom_name": None,
                             "math": None,
                             "math_property": None,
+                            "math_group_type_index": None,
                             "properties": [],
                         },
                         "label": "event_name",
@@ -838,6 +853,7 @@ def trend_test_factory(trends, event_factory, person_factory, action_factory, co
                             "custom_name": None,
                             "math": None,
                             "math_property": None,
+                            "math_group_type_index": None,
                             "properties": [],
                         },
                         "label": "event_name",
@@ -865,6 +881,7 @@ def trend_test_factory(trends, event_factory, person_factory, action_factory, co
                             "custom_name": None,
                             "math": None,
                             "math_property": None,
+                            "math_group_type_index": None,
                             "properties": [],
                         },
                         "label": "event_name",
@@ -891,6 +908,7 @@ def trend_test_factory(trends, event_factory, person_factory, action_factory, co
                             "custom_name": None,
                             "math": None,
                             "math_property": None,
+                            "math_group_type_index": None,
                             "properties": [],
                         },
                         "label": "event_name",
@@ -917,6 +935,7 @@ def trend_test_factory(trends, event_factory, person_factory, action_factory, co
                             "custom_name": None,
                             "math": None,
                             "math_property": None,
+                            "math_group_type_index": None,
                             "properties": [],
                         },
                         "label": "event_name",
@@ -943,6 +962,7 @@ def trend_test_factory(trends, event_factory, person_factory, action_factory, co
                             "custom_name": None,
                             "math": None,
                             "math_property": None,
+                            "math_group_type_index": None,
                             "properties": [],
                         },
                         "label": "event_name",
@@ -994,6 +1014,7 @@ def trend_test_factory(trends, event_factory, person_factory, action_factory, co
                             "custom_name": None,
                             "math": None,
                             "math_property": None,
+                            "math_group_type_index": None,
                             "properties": [],
                         },
                         "label": "event_name",
@@ -1060,6 +1081,7 @@ def trend_test_factory(trends, event_factory, person_factory, action_factory, co
                             "custom_name": None,
                             "math": None,
                             "math_property": None,
+                            "math_group_type_index": None,
                             "properties": [],
                         },
                         "label": "event_name",
@@ -1104,6 +1126,7 @@ def trend_test_factory(trends, event_factory, person_factory, action_factory, co
                             "custom_name": None,
                             "math": None,
                             "math_property": None,
+                            "math_group_type_index": None,
                             "properties": [],
                         },
                         "label": "event_name",
@@ -1138,6 +1161,7 @@ def trend_test_factory(trends, event_factory, person_factory, action_factory, co
                             "custom_name": None,
                             "math": None,
                             "math_property": None,
+                            "math_group_type_index": None,
                             "properties": [],
                         },
                         "label": "event_name",
@@ -1173,6 +1197,7 @@ def trend_test_factory(trends, event_factory, person_factory, action_factory, co
                             "custom_name": None,
                             "math": None,
                             "math_property": None,
+                            "math_group_type_index": None,
                             "properties": [],
                         },
                         "label": "event_name",
@@ -1207,6 +1232,7 @@ def trend_test_factory(trends, event_factory, person_factory, action_factory, co
                             "custom_name": None,
                             "math": None,
                             "math_property": None,
+                            "math_group_type_index": None,
                             "properties": [],
                         },
                         "label": "event_name",
@@ -1240,6 +1266,7 @@ def trend_test_factory(trends, event_factory, person_factory, action_factory, co
                             "custom_name": None,
                             "math": None,
                             "math_property": None,
+                            "math_group_type_index": None,
                             "properties": [],
                         },
                         "label": "event_name",
@@ -1272,6 +1299,7 @@ def trend_test_factory(trends, event_factory, person_factory, action_factory, co
                             "custom_name": None,
                             "math": None,
                             "math_property": None,
+                            "math_group_type_index": None,
                             "properties": [],
                         },
                         "label": "event_name",
@@ -2096,7 +2124,7 @@ def trend_test_factory(trends, event_factory, person_factory, action_factory, co
                 )
 
             self.assertListEqual(
-                sorted([res["breakdown_value"] for res in event_response]), ["person1", "person2", "person3", "person4"]
+                sorted(res["breakdown_value"] for res in event_response), ["person1", "person2", "person3"]
             )
 
             for response in event_response:
@@ -2107,12 +2135,84 @@ def trend_test_factory(trends, event_factory, person_factory, action_factory, co
                     self.assertEqual(response["count"], 3)
                 if response["breakdown_value"] == "person3":
                     self.assertEqual(response["count"], 3)
-                if response["breakdown_value"] == "person4":
-                    self.assertEqual(response["count"], 0)
 
             self.assertEntityResponseEqual(
                 event_response, action_response,
             )
+
+        def test_breakdown_by_property_pie(self):
+            person1 = person_factory(team_id=self.team.pk, distinct_ids=["person1"])
+            event_factory(
+                team=self.team,
+                event="watched movie",
+                distinct_id="person1",
+                timestamp="2020-01-01T12:00:00Z",
+                properties={"fake_prop": "value_1"},
+            )
+
+            person2 = person_factory(team_id=self.team.pk, distinct_ids=["person2"])
+            event_factory(
+                team=self.team,
+                event="watched movie",
+                distinct_id="person2",
+                timestamp="2020-01-01T12:00:00Z",
+                properties={"fake_prop": "value_1"},
+            )
+            event_factory(
+                team=self.team,
+                event="watched movie",
+                distinct_id="person2",
+                timestamp="2020-01-02T12:00:00Z",
+                properties={"fake_prop": "value_2"},
+            )
+
+            person3 = person_factory(team_id=self.team.pk, distinct_ids=["person3"])
+            event_factory(
+                team=self.team,
+                event="watched movie",
+                distinct_id="person3",
+                timestamp="2020-01-01T12:00:00Z",
+                properties={"fake_prop": "value_1"},
+            )
+
+            person4 = person_factory(team_id=self.team.pk, distinct_ids=["person4"])
+            event_factory(
+                team=self.team,
+                event="watched movie",
+                distinct_id="person4",
+                timestamp="2020-01-05T12:00:00Z",
+                properties={"fake_prop": "value_1"},
+            )
+
+            with freeze_time("2020-01-04T13:01:01Z"):
+                data = {
+                    "date_from": "-14d",
+                    "breakdown": "fake_prop",
+                    "breakdown_type": "event",
+                    "display": "ActionsPie",
+                    "events": [
+                        {"id": "watched movie", "name": "watched movie", "type": "events", "order": 0, "math": "dau",}
+                    ],
+                }
+                event_response = trends().run(Filter(data=data), self.team,)
+                event_response = sorted(event_response, key=lambda resp: resp["breakdown_value"])
+
+                entity = Entity({"id": "watched movie", "type": "events", "math": "dau"})
+                data.update({"breakdown_value": "value_1"})
+                people = self._get_trend_people(Filter(data=data), entity)
+
+                # TODO: improve ee/postgres handling
+                value_1_ids = sorted(person["id"] for person in people)
+                self.assertTrue(
+                    value_1_ids == sorted([person1.uuid, person2.uuid, person3.uuid])
+                    or value_1_ids == sorted([person1.pk, person2.pk, person3.pk])
+                )
+
+                data.update({"breakdown_value": "value_2"})
+                people = self._get_trend_people(Filter(data=data), entity)
+
+                value_2_ids = [person["id"] for person in people]
+                self.assertTrue(value_2_ids == [person2.uuid] or value_2_ids == [person2.pk])
 
         @test_with_materialized_columns(person_properties=["name"])
         def test_breakdown_by_person_property_pie(self):

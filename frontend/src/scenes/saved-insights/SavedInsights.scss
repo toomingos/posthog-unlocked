@@ -6,6 +6,7 @@
     flex-direction: column;
 
     .new-insight-dropdown-btn {
+        cursor: pointer;
         height: 40px;
         background-color: $primary;
         padding: 8px 12px 8px 16px;
@@ -50,6 +51,19 @@
         border: 1px solid $border;
         border-radius: 4px;
         padding: 8px;
+
+        .icon-column {
+            width: 32px;
+            padding-right: 0;
+            svg {
+                display: block;
+            }
+        }
+        .options-column {
+            width: 24px;
+            padding-left: 0;
+            padding-right: 10px;
+        }
     }
 
     .ant-tabs-nav-wrap {
@@ -143,6 +157,29 @@
                 height: 50px;
                 padding: 0 3rem;
             }
+        }
+    }
+}
+
+.new-insight-overlay {
+    max-width: 18rem;
+}
+
+.insight-type-icon-dropdown {
+    vertical-align: middle;
+}
+.insight-type-icon-wrapper {
+    display: flex;
+    align-items: center;
+    .icon-container {
+        height: 22px;
+        width: 22px;
+        margin-right: 8px;
+        position: relative;
+        .icon-container-inner {
+            position: absolute;
+            top: -6px;
+            left: -5px;
         }
     }
 }

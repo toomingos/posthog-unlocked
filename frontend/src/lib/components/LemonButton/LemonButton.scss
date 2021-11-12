@@ -1,0 +1,55 @@
+@import '~/vars';
+
+.LemonButton {
+    color: var(--primary);
+    font-weight: 600;
+    cursor: pointer;
+    &:hover {
+        background: var(--primary-bg-hover);
+    }
+    &:active {
+        background: var(--primary-bg-active);
+    }
+    .LemonRow__icon {
+        color: var(--primary);
+    }
+}
+
+.LemonButton--primary {
+    background: var(--primary);
+    color: #fff;
+    &:hover {
+        background: var(--primary-hover);
+    }
+    &:active {
+        background: var(--primary-active);
+    }
+    .LemonRow__icon {
+        color: #fff;
+    }
+}
+
+.LemonButton--stealth {
+    color: var(--text-default);
+    font-weight: 400;
+    .LemonRow__icon {
+        color: var(--muted-alt);
+    }
+}
+
+.LemonButton--highlighted {
+    background: var(--primary-bg-hover);
+    color: var(--text-default);
+    .LemonRow__icon {
+        color: var(--primary);
+    }
+}
+
+.LemonButtonWithSideAction {
+    position: relative;
+    .side-button {
+        position: absolute;
+        top: 0.5rem;
+        right: 0.5rem;
+    }
+}

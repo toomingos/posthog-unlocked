@@ -1,4 +1,5 @@
-from typing import Any, Dict, Type
+import copy
+from typing import Any, Dict, List, Type
 
 from django.core.cache import cache
 from django.db.models import QuerySet
@@ -23,7 +24,7 @@ from posthog.constants import (
     TRENDS_STICKINESS,
 )
 from posthog.decorators import CacheType, cached_function
-from posthog.models import DashboardItem, Event, Filter, Team
+from posthog.models import Event, Filter, Insight, Team
 from posthog.models.filters import RetentionFilter
 from posthog.models.filters.path_filter import PathFilter
 from posthog.models.filters.sessions_filter import SessionsFilter
@@ -31,6 +32,7 @@ from posthog.models.filters.stickiness_filter import StickinessFilter
 from posthog.permissions import ProjectMembershipNecessaryPermissions, TeamMemberAccessPermission
 from posthog.queries import paths, retention, stickiness, trends
 from posthog.queries.sessions.sessions import Sessions
+from posthog.tasks.update_cache import update_dashboard_item_cache
 from posthog.utils import generate_cache_key, get_safe_cache, relative_date_parse, should_refresh, str_to_bool
 
 
@@ -40,7 +42,7 @@ class InsightBasicSerializer(serializers.ModelSerializer):
     """
 
     class Meta:
-        model = DashboardItem
+        model = Insight
         fields = [
             "id",
             "short_id",
@@ -67,10 +69,11 @@ class InsightBasicSerializer(serializers.ModelSerializer):
 
 class InsightSerializer(InsightBasicSerializer):
     result = serializers.SerializerMethodField()
+    last_refresh = serializers.SerializerMethodField()
     created_by = UserBasicSerializer(read_only=True)
 
     class Meta:
-        model = DashboardItem
+        model = Insight
         fields = [
             "id",
             "short_id",
@@ -93,43 +96,65 @@ class InsightSerializer(InsightBasicSerializer):
             "favorited",
             "saved",
             "created_by",
+            "is_sample",
         ]
-        read_only_fields = (
-            "created_by",
-            "created_at",
-            "short_id",
-            "updated_at",
-        )
+        read_only_fields = ("created_by", "created_at", "short_id", "updated_at", "is_sample")
 
-    def create(self, validated_data: Dict, *args: Any, **kwargs: Any) -> DashboardItem:
+    def create(self, validated_data: Dict, *args: Any, **kwargs: Any) -> Insight:
         request = self.context["request"]
         team = Team.objects.get(id=self.context["team_id"])
         validated_data.pop("last_refresh", None)  # last_refresh sometimes gets sent if dashboard_item is duplicated
 
-        if not validated_data.get("dashboard", None):
-            dashboard_item = DashboardItem.objects.create(team=team, created_by=request.user, **validated_data)
+        if not validated_data.get("dashboard", None) and not validated_data.get("dive_dashboard", None):
+            dashboard_item = Insight.objects.create(team=team, created_by=request.user, **validated_data)
             return dashboard_item
         elif validated_data["dashboard"].team == team:
             created_by = validated_data.pop("created_by", request.user)
-            dashboard_item = DashboardItem.objects.create(
-                team=team, last_refresh=now(), created_by=created_by, **validated_data,
+            dashboard_item = Insight.objects.create(
+                team=team, last_refresh=now(), created_by=created_by, **validated_data
             )
             return dashboard_item
         else:
             raise serializers.ValidationError("Dashboard not found")
 
-    def get_result(self, dashboard_item: DashboardItem):
-        if not dashboard_item.filters:
+    def update(self, instance: Insight, validated_data: Dict, **kwargs) -> Insight:
+        # Remove is_sample if it's set as user has altered the sample configuration
+        validated_data["is_sample"] = False
+        return super().update(instance, validated_data)
+
+    def get_result(self, insight: Insight):
+        if not insight.filters:
             return None
-        result = get_safe_cache(dashboard_item.filters_hash)
+        if self.context["request"].GET.get("refresh"):
+            return update_dashboard_item_cache(insight, None)
+
+        result = get_safe_cache(insight.filters_hash)
         if not result or result.get("task_id", None):
             return None
         # Data might not be defined if there is still cached results from before moving from 'results' to 'data'
-        return result.get("data")
+        return result.get("result")
+
+    def get_last_refresh(self, insight: Insight):
+        if self.context["request"].GET.get("refresh"):
+            return now()
+
+        result = self.get_result(insight)
+        if result is not None:
+            return insight.last_refresh
+        if insight.last_refresh is not None:
+            # Update last_refresh without updating "updated_at" (insight edit date)
+            Insight.objects.filter(pk=insight.pk).update(last_refresh=None)
+            insight.refresh_from_db()
+        return None
+
+    def to_representation(self, instance: Insight):
+        representation = super().to_representation(instance)
+        representation["filters"] = instance.dashboard_filters(dashboard=self.context.get("dashboard"))
+        return representation
 
 
 class InsightViewSet(StructuredViewSetMixin, viewsets.ModelViewSet):
-    queryset = DashboardItem.objects.all()
+    queryset = Insight.objects.all()
     serializer_class = InsightSerializer
     permission_classes = [IsAuthenticated, ProjectMembershipNecessaryPermissions, TeamMemberAccessPermission]
     filter_backends = [DjangoFilterBackend]
@@ -179,19 +204,28 @@ class InsightViewSet(StructuredViewSetMixin, viewsets.ModelViewSet):
                 queryset = queryset.filter(name__icontains=request.GET["search"])
         return queryset
 
+    @action(methods=["patch"], detail=False)
+    def layouts(self, request, **kwargs):
+        """Dashboard item layouts."""
+        queryset = self.get_queryset()
+        for data in request.data["items"]:
+            queryset.filter(pk=data["id"]).update(layouts=data["layouts"])
+        serializer = self.get_serializer(queryset.all(), many=True)
+        return Response(serializer.data)
+
     # ******************************************
     # Calculated Insight Endpoints
-    # /insight/trend
-    # /insight/session
-    # /insight/funnel
-    # /insight/retention
-    # /insight/path
+    # /projects/:id/insights/trend
+    # /projects/:id/insights/session
+    # /projects/:id/insights/funnel
+    # /projects/:id/insights/retention
+    # /projects/:id/insights/path
     #
     # Request parameteres and caching are handled here and passed onto respective .queries classes
     # ******************************************
 
     # ******************************************
-    # /insight/trend
+    # /projects/:id/insights/trend
     #
     # params:
     # - from_dashboard: (string) determines trend is being retrieved from dashboard item to update dashboard_item metadata
@@ -223,7 +257,7 @@ class InsightViewSet(StructuredViewSetMixin, viewsets.ModelViewSet):
         return {"result": result}
 
     # ******************************************
-    # /insight/session
+    # /projects/:id/insights/session
     #
     # params:
     # - session: (string: avg, dist) specifies session type
@@ -239,7 +273,7 @@ class InsightViewSet(StructuredViewSetMixin, viewsets.ModelViewSet):
         return {"result": result}
 
     # ******************************************
-    # /insight/funnel
+    # /projects/:id/insights/funnel
     # The funnel endpoint is asynchronously processed. When a request is received, the endpoint will
     # call an async task with an id that can be continually polled for 3 minutes.
     #
@@ -250,9 +284,45 @@ class InsightViewSet(StructuredViewSetMixin, viewsets.ModelViewSet):
     # ******************************************
     @action(methods=["GET", "POST"], detail=False)
     def funnel(self, request: request.Request, *args: Any, **kwargs: Any) -> Response:
-        result = self.calculate_funnel(request)
+        funnel = self.calculate_funnel(request)
 
-        return Response(result)
+        funnel["result"] = self.protect_old_clients_from_multi_property_default(request.data, funnel["result"])
+
+        return Response(funnel)
+
+    @staticmethod
+    def protect_old_clients_from_multi_property_default(
+        data: Dict[str, Any], result: List[List[Dict[str, Any]]]
+    ) -> List[List[Dict[str, Any]]]:
+        """
+        Implementing multi property breakdown will default breakdown to a list even if it is received as a string.
+        This is a breaking change for clients.
+        Clients which do not have multi property breakdown enabled will send a single breakdown as a string
+        This method checks if the request has come in that format and "unboxes" the list
+        to avoid breaking that client
+        :param data: the data in the request
+        :param result: the query result which may contain an unwanted array breakdown
+        :return:
+        """
+        is_single_property_breakdown = (
+            "insight" in data
+            and data["insight"] == "FUNNELS"
+            and "breakdown_type" in data
+            and data["breakdown_type"] in ["person", "event"]
+            and "breakdown" in data
+            and isinstance(data["breakdown"], str)
+        )
+        if is_single_property_breakdown:
+            copied_result = copy.deepcopy(result)
+            for series_index, series in enumerate(result):
+                for data_index, data in enumerate(series):
+                    if isinstance(data["breakdown"], List):
+                        copied_result[series_index][data_index]["breakdown"] = data["breakdown"][0]
+                    if isinstance(data["breakdown_value"], List):
+                        copied_result[series_index][data_index]["breakdown_value"] = data["breakdown_value"][0]
+            return copied_result
+        else:
+            return result
 
     @cached_function
     def calculate_funnel(self, request: request.Request) -> Dict[str, Any]:
@@ -260,7 +330,7 @@ class InsightViewSet(StructuredViewSetMixin, viewsets.ModelViewSet):
         refresh = should_refresh(request)
 
         filter = Filter(request=request, data={**request.data, "insight": INSIGHT_FUNNELS})
-        cache_key = generate_cache_key("{}_{}".format(filter.toJSON(), team.pk))
+        cache_key = generate_cache_key(f"{filter.toJSON()}_{team.pk}")
         result = {"loading": True}
 
         if refresh:
@@ -284,7 +354,7 @@ class InsightViewSet(StructuredViewSetMixin, viewsets.ModelViewSet):
         return {"result": result}
 
     # ******************************************
-    # /insight/retention
+    # /projects/:id/insights/retention
     # params:
     # - start_entity: (dict) specifies id and type of the entity to focus retention on
     # - **shared filter types
@@ -305,7 +375,7 @@ class InsightViewSet(StructuredViewSetMixin, viewsets.ModelViewSet):
         return {"result": result}
 
     # ******************************************
-    # /insight/path
+    # /projects/:id/insights/path
     # params:
     # - start: (string) specifies the name of the starting property or element
     # - request_type: (string: $pageview, $autocapture, $screen, custom_event) specifies the path type
@@ -327,7 +397,7 @@ class InsightViewSet(StructuredViewSetMixin, viewsets.ModelViewSet):
     def _refresh_dashboard(self, request) -> None:
         dashboard_id = request.GET.get(FROM_DASHBOARD, None)
         if dashboard_id:
-            DashboardItem.objects.filter(pk=dashboard_id).update(last_refresh=now())
+            Insight.objects.filter(pk=dashboard_id).update(last_refresh=now())
 
 
 class LegacyInsightViewSet(InsightViewSet):

@@ -12,10 +12,7 @@ import { Popup } from 'lib/components/Popup/Popup'
 import { PropertyFilterInternalProps } from 'lib/components/PropertyFilters'
 import { TaxonomicFilter } from 'lib/components/TaxonomicFilter/TaxonomicFilter'
 import { TaxonomicFilterGroupType } from 'lib/components/TaxonomicFilter/types'
-import {
-    propertyFilterTypeToTaxonomicFilterType,
-    taxonomicFilterTypeToPropertyFilterType,
-} from 'lib/components/PropertyFilters/utils'
+import { propertyFilterTypeToTaxonomicFilterType } from 'lib/components/PropertyFilters/utils'
 
 let uniqueMemoizedIndex = 0
 
@@ -24,15 +21,14 @@ export function TaxonomicPropertyFilter({
     index,
     onComplete,
     disablePopover, // inside a dropdown if this is false
-    groupTypes,
+    taxonomicGroupTypes,
 }: PropertyFilterInternalProps): JSX.Element {
     const pageKey = useMemo(() => pageKeyInput || `filter-${uniqueMemoizedIndex++}`, [pageKeyInput])
     const { setFilter } = useActions(propertyFilterLogic)
 
     const logic = taxonomicPropertyFilterLogic({ pageKey, filterIndex: index })
-    const { filter, dropdownOpen, selectedCohortName } = useValues(logic)
+    const { filter, dropdownOpen, selectedCohortName, activeTaxonomicGroup } = useValues(logic)
     const { openDropdown, closeDropdown, selectItem } = useActions(logic)
-
     const showInitialSearchInline = !disablePopover && ((!filter?.type && !filter?.key) || filter?.type === 'cohort')
     const showOperatorValueSelect = filter?.type && filter?.key && filter?.type !== 'cohort'
 
@@ -43,16 +39,16 @@ export function TaxonomicPropertyFilter({
 
     const taxonomicFilter = (
         <TaxonomicFilter
-            groupType={propertyFilterTypeToTaxonomicFilterType(filter?.type)}
+            groupType={propertyFilterTypeToTaxonomicFilterType(filter?.type, filter?.group_type_index)}
             value={cohortOrOtherValue}
-            onChange={(groupType, value) => {
-                selectItem(taxonomicFilterTypeToPropertyFilterType(groupType), value)
-                if (groupType === TaxonomicFilterGroupType.Cohorts) {
+            onChange={(taxonomicGroup, value) => {
+                selectItem(taxonomicGroup, value)
+                if (taxonomicGroup.type === TaxonomicFilterGroupType.Cohorts) {
                     onComplete?.()
                 }
             }}
-            groupTypes={
-                groupTypes || [
+            taxonomicGroupTypes={
+                taxonomicGroupTypes || [
                     TaxonomicFilterGroupType.EventProperties,
                     TaxonomicFilterGroupType.PersonProperties,
                     TaxonomicFilterGroupType.Cohorts,
@@ -111,9 +107,17 @@ export function TaxonomicPropertyFilter({
                             operator={filter?.operator}
                             value={filter?.value}
                             placeholder="Enter value..."
+                            endpoint={filter?.key && activeTaxonomicGroup?.valuesEndpoint?.(filter.key)}
                             onChange={(newOperator, newValue) => {
                                 if (filter?.key && filter?.type) {
-                                    setFilter(index, filter?.key, newValue || null, newOperator, filter?.type)
+                                    setFilter(
+                                        index,
+                                        filter?.key,
+                                        newValue || null,
+                                        newOperator,
+                                        filter?.type,
+                                        filter?.group_type_index
+                                    )
                                 }
                                 if (
                                     newOperator &&

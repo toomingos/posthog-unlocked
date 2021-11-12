@@ -1,7 +1,7 @@
 import dataclasses
 import json
 from datetime import datetime
-from typing import Any, Dict, List, TypedDict, Union
+from typing import Any, Dict, List, Union
 
 import pytest
 from django.test import Client
@@ -16,6 +16,8 @@ from posthog.api.test.test_event_definition import (
     create_user,
 )
 from posthog.api.test.test_retention import identify
+from posthog.models.team import Team
+from posthog.test.base import stripResponse
 
 
 @pytest.mark.django_db
@@ -47,7 +49,9 @@ def test_includes_only_intervals_within_range(client: Client):
         #  First identify as a member of the cohort
         distinct_id = "abc"
         identify(distinct_id=distinct_id, team_id=team.id, properties={"cohort_identifier": 1})
-        cohort = create_cohort_ok(client=client, name="test cohort", groups=[{"properties": {"cohort_identifier": 1}}])
+        cohort = create_cohort_ok(
+            client=client, team_id=team.id, name="test cohort", groups=[{"properties": {"cohort_identifier": 1}}]
+        )
 
         for date in ["2021-09-04", "2021-09-05", "2021-09-12", "2021-09-19"]:
             capture_event(
@@ -83,33 +87,31 @@ def test_includes_only_intervals_within_range(client: Client):
                     }
                 ],
             ),
+            team=team,
         )
-        assert trends == {
-            "is_cached": False,
-            "last_refresh": "2021-09-20T16:00:00Z",
-            "next": None,
-            "result": [
-                {
-                    "action": {
-                        "id": "$pageview",
-                        "type": "events",
-                        "order": 0,
-                        "name": "$pageview",
-                        "custom_name": None,
-                        "math": "dau",
-                        "math_property": None,
-                        "properties": [],
-                    },
-                    "breakdown_value": cohort["id"],
-                    "label": "$pageview - test cohort",
-                    "count": 3.0,
-                    "data": [1.0, 1.0, 1.0],
-                    # Prior to the fix this would also include '29-Aug-2021'
-                    "labels": ["5-Sep-2021", "12-Sep-2021", "19-Sep-2021"],
-                    "days": ["2021-09-05", "2021-09-12", "2021-09-19"],
-                }
-            ],
-        }
+
+        assert stripResponse(trends["result"], remove=("persons_urls", "filter")) == [
+            {
+                "action": {
+                    "id": "$pageview",
+                    "type": "events",
+                    "order": 0,
+                    "name": "$pageview",
+                    "custom_name": None,
+                    "math": "dau",
+                    "math_property": None,
+                    "math_group_type_index": None,
+                    "properties": [],
+                },
+                "breakdown_value": cohort["id"],
+                "label": "$pageview - test cohort",
+                "count": 3.0,
+                "data": [1.0, 1.0, 1.0],
+                # Prior to the fix this would also include '29-Aug-2021'
+                "labels": ["5-Sep-2021", "12-Sep-2021", "19-Sep-2021"],
+                "days": ["2021-09-05", "2021-09-12", "2021-09-19"],
+            }
+        ]
 
 
 @dataclasses.dataclass
@@ -124,9 +126,9 @@ class TrendsRequest:
     events: List[Dict[str, Any]]
 
 
-def get_trends(client, request: TrendsRequest):
+def get_trends(client, request: TrendsRequest, team: Team):
     return client.get(
-        "/api/insight/trend/",
+        f"/api/projects/{team.id}/insights/trend/",
         data={
             "date_from": request.date_from,
             "date_to": request.date_to,
@@ -140,7 +142,7 @@ def get_trends(client, request: TrendsRequest):
     )
 
 
-def get_trends_ok(client: Client, request: TrendsRequest):
-    response = get_trends(client=client, request=request)
+def get_trends_ok(client: Client, request: TrendsRequest, team: Team):
+    response = get_trends(client=client, request=request, team=team)
     assert response.status_code == 200, response.content
     return response.json()

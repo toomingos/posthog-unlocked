@@ -1,5 +1,4 @@
 import json
-import os
 import random
 import secrets
 from datetime import timedelta
@@ -9,7 +8,7 @@ from django.utils.timezone import now
 
 from posthog.constants import TREND_FILTER_TYPE_ACTIONS
 from posthog.demo.data_generator import DataGenerator
-from posthog.models import Action, ActionStep, Dashboard, DashboardItem, Person, PropertyDefinition
+from posthog.models import Action, ActionStep, Dashboard, Insight, Person, PropertyDefinition
 from posthog.models.filters.mixins.utils import cached_property
 from posthog.models.utils import UUIDT
 from posthog.utils import get_absolute_path
@@ -50,7 +49,7 @@ class WebDataGenerator(DataGenerator):
         dashboard = Dashboard.objects.create(
             name="Web Analytics", pinned=True, team=self.team, share_token=secrets.token_urlsafe(22)
         )
-        DashboardItem.objects.create(
+        Insight.objects.create(
             team=self.team,
             dashboard=dashboard,
             name="HogFlix signup -> watching movie",
@@ -170,11 +169,13 @@ class WebDataGenerator(DataGenerator):
         date = now()
         start_time = self.demo_recording["result"]["snapshots"][0]["timestamp"]
         session_id = str(UUIDT())
+        window_id = str(UUIDT())
 
         for snapshot in self.demo_recording["result"]["snapshots"]:
             self.snapshots.append(
                 {
                     "session_id": session_id,
+                    "window_id": window_id,
                     "distinct_id": distinct_id,
                     "timestamp": date + timedelta(milliseconds=snapshot["timestamp"] - start_time),
                     "snapshot_data": snapshot,

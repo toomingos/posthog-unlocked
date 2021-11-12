@@ -19,6 +19,7 @@ import relativeTime from 'dayjs/plugin/relativeTime'
 import { cohortsUrlLogicType } from './CohortsType'
 import { Link } from 'lib/components/Link'
 import { PROPERTY_MATCH_TYPE } from 'lib/constants'
+import { SceneExport } from 'scenes/sceneTypes'
 
 dayjs.extend(relativeTime)
 
@@ -34,6 +35,7 @@ const NEW_COHORT: CohortType = {
 }
 
 const cohortsUrlLogic = kea<cohortsUrlLogicType>({
+    path: ['scenes', 'cohorts', 'cohortsUrlLogic'],
     actions: {
         setOpenCohort: (cohort: CohortType | null) => ({ cohort }),
     },
@@ -56,10 +58,12 @@ const cohortsUrlLogic = kea<cohortsUrlLogicType>({
                 cohortId !== 'personsModalNew' &&
                 Number(cohortId) !== values.openCohort?.id
             ) {
-                const cohort = await api.get('api/cohort/' + cohortId)
+                const cohort = await api.cohorts.get(parseInt(cohortId))
                 actions.setOpenCohort(cohort)
             } else if (cohortId === 'new') {
                 actions.setOpenCohort(NEW_COHORT)
+            } else if (!cohortId) {
+                actions.setOpenCohort(null)
             }
         },
     }),
@@ -144,7 +148,7 @@ export function Cohorts(): JSX.Element {
                         </a>
                         {cohort.id !== 'new' && cohort.id !== 'personsModalNew' && (
                             <DeleteWithUndo
-                                endpoint="cohort"
+                                endpoint={api.cohorts.determineDeleteEndpoint()}
                                 object={{ name: cohort.name, id: cohort.id }}
                                 className="text-danger"
                                 style={{ marginLeft: 8, marginRight: 8 }}
@@ -220,4 +224,9 @@ export function Cohorts(): JSX.Element {
             </div>
         </div>
     )
+}
+
+export const scene: SceneExport = {
+    component: Cohorts,
+    logic: cohortsUrlLogic,
 }

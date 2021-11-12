@@ -13,8 +13,15 @@ import {
     SelectOption,
 } from '~/types'
 import { PropertyFilters } from 'lib/components/PropertyFilters/PropertyFilters'
-import { EVENT_MATH_TYPE, FEATURE_FLAGS, MATHS, PROPERTY_MATH_TYPE } from 'lib/constants'
-import { CloseSquareOutlined, DeleteOutlined, DownOutlined, EditOutlined, FilterOutlined } from '@ant-design/icons'
+import { FEATURE_FLAGS } from 'lib/constants'
+import {
+    CloseSquareOutlined,
+    DeleteOutlined,
+    DownOutlined,
+    EditOutlined,
+    FilterOutlined,
+    CopyOutlined,
+} from '@ant-design/icons'
 import { SelectGradientOverflow } from 'lib/components/SelectGradientOverflow'
 import { BareEntity, entityFilterLogic } from '../entityFilterLogic'
 import { PropertyKeyInfo } from 'lib/components/PropertyKeyInfo'
@@ -29,9 +36,7 @@ import { TaxonomicFilter } from 'lib/components/TaxonomicFilter/TaxonomicFilter'
 import { TaxonomicFilterGroupType } from 'lib/components/TaxonomicFilter/types'
 import { EntityFilterInfo } from 'lib/components/EntityFilterInfo'
 import clsx from 'clsx'
-
-const EVENT_MATH_ENTRIES = Object.entries(MATHS).filter(([, item]) => item.type == EVENT_MATH_TYPE)
-const PROPERTY_MATH_ENTRIES = Object.entries(MATHS).filter(([, item]) => item.type == PROPERTY_MATH_TYPE)
+import { apiValueToMathType, mathsLogic, mathTypeToApiValues } from 'scenes/trends/mathsLogic'
 
 const determineFilterLabel = (visible: boolean, filter: Partial<ActionFilter>): string => {
     if (visible) {
@@ -80,7 +85,8 @@ export interface ActionFilterRowProps {
     stripeActionRow?: boolean // Whether or not to alternate the color behind the action rows
     hasBreakdown: boolean // Whether the current graph has a breakdown filter applied
     showNestedArrow?: boolean // Show nested arrows to the left of property filter buttons
-    groupTypes?: TaxonomicFilterGroupType[] // Specify which tabs to show, used in taxonomic filter
+    actionsTaxonomicGroupTypes?: TaxonomicFilterGroupType[] // Which tabs to show for actions selector
+    propertiesTaxonomicGroupTypes?: TaxonomicFilterGroupType[] // Which tabs to show for property filters
     hideDeleteBtn?: boolean // Choose to hide delete btn. You can use the onClose function passed into customRow{Pre|Suf}fix to render the delete btn anywhere
     disabled?: boolean
     renderRow?: ({
@@ -119,7 +125,8 @@ export function ActionFilterRow({
     hasBreakdown,
     showNestedArrow = false,
     hideDeleteBtn = false,
-    groupTypes = [TaxonomicFilterGroupType.Events, TaxonomicFilterGroupType.Actions],
+    actionsTaxonomicGroupTypes = [TaxonomicFilterGroupType.Events, TaxonomicFilterGroupType.Actions],
+    propertiesTaxonomicGroupTypes,
     disabled = false,
     renderRow,
 }: ActionFilterRowProps): JSX.Element {
@@ -131,22 +138,24 @@ export function ActionFilterRow({
         removeLocalFilter,
         updateFilterProperty,
         setEntityFilterVisibility,
+        duplicateFilter,
     } = useActions(logic)
     const { numericalPropertyNames } = useValues(propertyDefinitionsModel)
     const { featureFlags } = useValues(featureFlagLogic)
+    const { mathDefinitions } = useValues(mathsLogic)
 
     const visible = typeof filter.order === 'number' ? entityFilterVisible[filter.order] : false
 
     let entity: BareEntity, name: string | null | undefined, value: PropertyFilterValue
-    const { math, math_property: mathProperty } = filter
+    const { math, math_property: mathProperty, math_group_type_index: mathGroupTypeIndex } = filter
 
     const onClose = (): void => {
         removeLocalFilter({ ...filter, index })
     }
     const onMathSelect = (_: unknown, selectedMath: string): void => {
         updateFilterMath({
-            math: selectedMath,
-            math_property: MATHS[selectedMath]?.onProperty ? mathProperty ?? '$time' : undefined,
+            ...mathTypeToApiValues(selectedMath),
+            math_property: mathDefinitions[selectedMath]?.onProperty ? mathProperty ?? '$time' : undefined,
             type: filter.type,
             index,
         })
@@ -199,16 +208,16 @@ export function ActionFilterRow({
                     value={
                         filter.type === 'actions' && typeof value === 'string' ? parseInt(value) : value || undefined
                     }
-                    onChange={(groupType, changedValue, item) => {
+                    onChange={(taxonomicGroup, changedValue, item) => {
                         updateFilter({
-                            type: taxonomicFilterGroupTypeToEntityType(groupType) || undefined,
+                            type: taxonomicFilterGroupTypeToEntityType(taxonomicGroup.type) || undefined,
                             id: `${changedValue}`,
                             name: item?.name,
                             index,
                         })
                     }}
                     onClose={() => selectFilter(null)}
-                    groupTypes={groupTypes}
+                    taxonomicGroupTypes={actionsTaxonomicGroupTypes}
                 />
             }
             visible={dropDownCondition}
@@ -267,14 +276,29 @@ export function ActionFilterRow({
             }}
             className={`row-action-btn show-rename`}
             data-attr={'show-prop-rename-' + index}
-            title="Rename"
+            title="Rename graph series"
         >
             <EditOutlined />
         </Button>
     )
 
+    const duplicateRowButton = (
+        <Button
+            type="link"
+            onClick={() => {
+                duplicateFilter(filter)
+            }}
+            className={`row-action-btn show-duplicabe`}
+            data-attr={'show-prop-duplicate-' + index}
+            title="Duplicate graph series"
+        >
+            <CopyOutlined />
+        </Button>
+    )
+
     const deleteButton = (
         <Button
+            style={filterCount === 1 ? { display: 'none' } : {}}
             type="link"
             onClick={onClose}
             className="row-action-btn delete"
@@ -345,13 +369,14 @@ export function ActionFilterRow({
                                 <Col style={{ maxWidth: `calc(50% - 16px${showSeriesIndicator ? ' - 32px' : ''})` }}>
                                     <MathSelector
                                         math={math}
+                                        mathGroupTypeIndex={mathGroupTypeIndex}
                                         index={index}
                                         onMathSelect={onMathSelect}
                                         areEventPropertiesNumericalAvailable={!!numericalPropertyNames.length}
                                         style={{ maxWidth: '100%', width: 'initial' }}
                                     />
                                 </Col>
-                                {MATHS[math || '']?.onProperty && (
+                                {mathDefinitions[math || '']?.onProperty && (
                                     <>
                                         {horizontalUI && <Col>on property</Col>}
                                         <Col
@@ -377,6 +402,7 @@ export function ActionFilterRow({
                         {featureFlags[FEATURE_FLAGS.RENAME_FILTERS] && (horizontalUI || fullWidth) && !hideRename && (
                             <Col>{renameRowButton}</Col>
                         )}
+                        {(horizontalUI || fullWidth) && !hideFilter && <Col>{duplicateRowButton}</Col>}
                         {!hideDeleteBtn && !horizontalUI && !singleFilter && (
                             <Col className="column-delete-btn">{deleteButton}</Col>
                         )}
@@ -418,6 +444,7 @@ export function ActionFilterRow({
                         disablePopover={horizontalUI}
                         style={{ marginBottom: 0 }}
                         showNestedArrow={showNestedArrow}
+                        taxonomicGroupTypes={propertiesTaxonomicGroupTypes}
                     />
                 </div>
             )}
@@ -427,6 +454,7 @@ export function ActionFilterRow({
 
 interface MathSelectorProps {
     math?: string
+    mathGroupTypeIndex?: number | null
     index: number
     onMathSelect: (index: number, value: any) => any // TODO
     areEventPropertiesNumericalAvailable?: boolean
@@ -435,6 +463,7 @@ interface MathSelectorProps {
 
 function MathSelector({
     math,
+    mathGroupTypeIndex,
     index,
     onMathSelect,
     areEventPropertiesNumericalAvailable,
@@ -445,8 +474,9 @@ function MathSelector({
     }`
     const { preflight } = useValues(preflightLogic)
     const { featureFlags } = useValues(featureFlagLogic)
+    const { eventMathEntries, propertyMathEntries } = useValues(mathsLogic)
 
-    let math_entries = EVENT_MATH_ENTRIES
+    let math_entries = eventMathEntries
 
     if (!featureFlags[FEATURE_FLAGS.TRAILING_WAU_MAU] || !preflight?.is_clickhouse_enabled) {
         math_entries = math_entries.filter((item) => item[0] !== 'weekly_active' && item[0] !== 'monthly_active')
@@ -455,7 +485,7 @@ function MathSelector({
     return (
         <Select
             style={{ width: 150, ...style }}
-            value={math || 'total'}
+            value={apiValueToMathType(math, mathGroupTypeIndex)}
             onChange={(value) => onMathSelect(index, value)}
             data-attr={`math-selector-${index}`}
             dropdownMatchSelectWidth={false}
@@ -496,7 +526,7 @@ function MathSelector({
                 })}
             </Select.OptGroup>
             <Select.OptGroup key="property aggregates" label="Property aggregation">
-                {PROPERTY_MATH_ENTRIES.map(([key, { name, description, onProperty }]) => {
+                {propertyMathEntries.map(([key, { name, description, onProperty }]) => {
                     const disabled = onProperty && !areEventPropertiesNumericalAvailable
                     return (
                         <Select.Option key={key} value={key} data-attr={`math-${key}-${index}`} disabled={disabled}>
@@ -535,6 +565,8 @@ interface MathPropertySelectorProps {
 }
 
 function MathPropertySelector(props: MathPropertySelectorProps): JSX.Element {
+    const { mathDefinitions } = useValues(mathsLogic)
+
     function isPropertyApplicable(value: PropertyFilter['value']): boolean {
         const includedProperties = ['$time']
         const excludedProperties = ['distinct_id', 'token']
@@ -568,7 +600,7 @@ function MathPropertySelector(props: MathPropertySelectorProps): JSX.Element {
                     <Tooltip
                         title={
                             <>
-                                Calculate {MATHS[props.math ?? ''].name.toLowerCase()} from property{' '}
+                                Calculate {mathDefinitions[props.math ?? ''].name.toLowerCase()} from property{' '}
                                 <code>{label}</code>. Note that only {props.name} occurences where <code>{label}</code>{' '}
                                 is set with a numeric value will be taken into account.
                             </>

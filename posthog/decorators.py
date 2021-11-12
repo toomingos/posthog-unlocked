@@ -2,15 +2,15 @@ from enum import Enum
 from functools import wraps
 from typing import Any, Callable, Dict, List, TypeVar, Union, cast
 
+from django.conf import settings
 from django.core.cache import cache
 from django.utils.timezone import now
 from rest_framework.request import Request
 from rest_framework.viewsets import GenericViewSet
 
 from posthog.models import User
-from posthog.models.dashboard_item import DashboardItem
 from posthog.models.filters.utils import get_filter
-from posthog.settings import TEMP_CACHE_RESULTS_TTL
+from posthog.models.insight import Insight
 from posthog.utils import should_refresh
 
 from .utils import generate_cache_key, get_safe_cache
@@ -40,7 +40,7 @@ def cached_function(f: Callable[[U, Request], T]) -> Callable[[U, Request], T]:
             return f(self, request)
 
         filter = get_filter(request=request, team=team)
-        cache_key = generate_cache_key("{}_{}".format(filter.toJSON(), team.pk))
+        cache_key = generate_cache_key(f"{filter.toJSON()}_{team.pk}")
 
         # return cached result if possible
         if not should_refresh(request):
@@ -58,10 +58,10 @@ def cached_function(f: Callable[[U, Request], T]) -> Callable[[U, Request], T]:
                 fresh_result_package["last_refresh"] = now()
                 fresh_result_package["is_cached"] = False
                 cache.set(
-                    cache_key, fresh_result_package, TEMP_CACHE_RESULTS_TTL,
+                    cache_key, fresh_result_package, settings.TEMP_CACHE_RESULTS_TTL,
                 )
                 if filter:
-                    dashboard_items = DashboardItem.objects.filter(team_id=team.pk, filters_hash=cache_key)
+                    dashboard_items = Insight.objects.filter(team_id=team.pk, filters_hash=cache_key)
                     dashboard_items.update(last_refresh=now())
         return fresh_result_package
 

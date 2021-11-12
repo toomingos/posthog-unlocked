@@ -1,17 +1,37 @@
 import { kea } from 'kea'
 import { taxonomicFilterLogicType } from './taxonomicFilterLogicType'
 import {
+    SimpleOption,
     TaxonomicFilterGroupType,
+    TaxonomicFilterGroup,
     TaxonomicFilterLogicProps,
     TaxonomicFilterValue,
 } from 'lib/components/TaxonomicFilter/types'
 import { infiniteListLogic } from 'lib/components/TaxonomicFilter/infiniteListLogic'
-import { groups } from 'lib/components/TaxonomicFilter/groups'
+import { personPropertiesModel } from '~/models/personPropertiesModel'
+import { ActionType, CohortType, EventDefinition, PersonProperty, PropertyDefinition } from '~/types'
+import { cohortsModel } from '~/models/cohortsModel'
+import { actionsModel } from '~/models/actionsModel'
+import { eventDefinitionsModel } from '~/models/eventDefinitionsModel'
+import { teamLogic } from '../../../scenes/teamLogic'
+import { groupsModel } from '~/models/groupsModel'
+import { groupPropertiesModel } from '~/models/groupPropertiesModel'
+import { capitalizeFirstLetter, toParams } from 'lib/utils'
 
 export const taxonomicFilterLogic = kea<taxonomicFilterLogicType>({
+    path: (key) => ['lib', 'components', 'TaxonomicFilter', 'taxonomicFilterLogic', key],
     props: {} as TaxonomicFilterLogicProps,
     key: (props) => `${props.taxonomicFilterLogicKey}`,
-
+    connect: {
+        values: [
+            teamLogic,
+            ['currentTeamId'],
+            groupsModel,
+            ['groupTypes'],
+            groupPropertiesModel,
+            ['allGroupProperties'],
+        ],
+    },
     actions: () => ({
         moveUp: true,
         moveDown: true,
@@ -21,8 +41,8 @@ export const taxonomicFilterLogic = kea<taxonomicFilterLogicType>({
         tabRight: true,
         setSearchQuery: (searchQuery: string) => ({ searchQuery }),
         setActiveTab: (activeTab: TaxonomicFilterGroupType) => ({ activeTab }),
-        selectItem: (groupType: TaxonomicFilterGroupType, value: TaxonomicFilterValue | null, item: any) => ({
-            groupType,
+        selectItem: (group: TaxonomicFilterGroup, value: TaxonomicFilterValue | null, item: any) => ({
+            group,
             value,
             item,
         }),
@@ -38,7 +58,7 @@ export const taxonomicFilterLogic = kea<taxonomicFilterLogicType>({
         ],
         activeTab: [
             (state: any): TaxonomicFilterGroupType => {
-                return selectors.groupType(state) || selectors.groupTypes(state)[0]
+                return selectors.groupType(state) || selectors.taxonomicGroupTypes(state)[0]
             },
             {
                 setActiveTab: (_, { activeTab }) => activeTab,
@@ -62,22 +82,130 @@ export const taxonomicFilterLogic = kea<taxonomicFilterLogicType>({
             () => [(_, props) => props.taxonomicFilterLogicKey],
             (taxonomicFilterLogicKey) => taxonomicFilterLogicKey,
         ],
-        groupTypes: [
-            () => [(_, props) => props.groupTypes],
-            (groupTypes): TaxonomicFilterGroupType[] => groupTypes || groups.map((g) => g.type),
+        taxonomicGroups: [
+            (selectors) => [selectors.currentTeamId, selectors.groupAnalyticsTaxonomicGroups],
+            (teamId, groupAnalyticsTaxonomicGroups): TaxonomicFilterGroup[] => [
+                {
+                    name: 'Events',
+                    type: TaxonomicFilterGroupType.Events,
+                    endpoint: `api/projects/${teamId}/event_definitions`,
+                    getName: (eventDefinition: EventDefinition): string => eventDefinition.name,
+                    getValue: (eventDefinition: EventDefinition): TaxonomicFilterValue => eventDefinition.name,
+                },
+                {
+                    name: 'Actions',
+                    type: TaxonomicFilterGroupType.Actions,
+                    logic: actionsModel as any,
+                    value: 'actions',
+                    getName: (action: ActionType): string => action.name,
+                    getValue: (action: ActionType): TaxonomicFilterValue => action.id,
+                },
+                {
+                    name: 'Elements',
+                    type: TaxonomicFilterGroupType.Elements,
+                    options: ['tag_name', 'text', 'href', 'selector'].map((option) => ({
+                        name: option,
+                    })) as SimpleOption[],
+                    getName: (option: SimpleOption): string => option.name,
+                    getValue: (option: SimpleOption): TaxonomicFilterValue => option.name,
+                },
+                {
+                    name: 'Event properties',
+                    type: TaxonomicFilterGroupType.EventProperties,
+                    endpoint: `api/projects/${teamId}/property_definitions`,
+                    getName: (propertyDefinition: PropertyDefinition): string => propertyDefinition.name,
+                    getValue: (propertyDefinition: PropertyDefinition): TaxonomicFilterValue => propertyDefinition.name,
+                },
+                {
+                    name: 'Person properties',
+                    type: TaxonomicFilterGroupType.PersonProperties,
+                    logic: personPropertiesModel,
+                    value: 'personProperties',
+                    getName: (personProperty: PersonProperty): string => personProperty.name,
+                    getValue: (personProperty: PersonProperty): TaxonomicFilterValue => personProperty.name,
+                },
+                {
+                    name: 'Cohorts',
+                    type: TaxonomicFilterGroupType.Cohorts,
+                    logic: cohortsModel,
+                    value: 'cohorts',
+                    getName: (cohort: CohortType): string => cohort.name || `Cohort ${cohort.id}`,
+                    getValue: (cohort: CohortType): TaxonomicFilterValue => cohort.id,
+                },
+                {
+                    name: 'Cohorts',
+                    type: TaxonomicFilterGroupType.CohortsWithAllUsers,
+                    logic: cohortsModel,
+                    value: 'cohortsWithAllUsers',
+                    getName: (cohort: CohortType): string => cohort.name || `Cohort ${cohort.id}`,
+                    getValue: (cohort: CohortType): TaxonomicFilterValue => cohort.id,
+                },
+                {
+                    name: 'Pageview URLs',
+                    type: TaxonomicFilterGroupType.PageviewUrls,
+                    endpoint: `api/projects/${teamId}/events/values/?key=$current_url`,
+                    searchAlias: 'value',
+                    getName: (option: SimpleOption): string => option.name,
+                    getValue: (option: SimpleOption): TaxonomicFilterValue => option.name,
+                },
+                {
+                    name: 'Screens',
+                    type: TaxonomicFilterGroupType.Screens,
+                    endpoint: `api/projects/${teamId}/events/values/?key=$screen_name`,
+                    searchAlias: 'value',
+                    getName: (option: SimpleOption): string => option.name,
+                    getValue: (option: SimpleOption): TaxonomicFilterValue => option.name,
+                },
+                {
+                    name: 'Custom Events',
+                    type: TaxonomicFilterGroupType.CustomEvents,
+                    logic: eventDefinitionsModel,
+                    value: 'customEvents',
+                    getName: (eventDefinition: EventDefinition): string => eventDefinition.name,
+                    getValue: (eventDefinition: EventDefinition): TaxonomicFilterValue => eventDefinition.name,
+                },
+                {
+                    name: 'Wildcards',
+                    type: TaxonomicFilterGroupType.Wildcards,
+                    // Populated via optionsFromProp
+                    getName: (option: SimpleOption): string => option.name,
+                    getValue: (option: SimpleOption): TaxonomicFilterValue => option.name,
+                },
+                ...groupAnalyticsTaxonomicGroups,
+            ],
+        ],
+        taxonomicGroupTypes: [
+            (selectors) => [(_, props) => props.taxonomicGroupTypes, selectors.taxonomicGroups],
+            (groupTypes, taxonomicGroups): TaxonomicFilterGroupType[] =>
+                groupTypes || taxonomicGroups.map((g) => g.type),
+        ],
+        groupAnalyticsTaxonomicGroups: [
+            (selectors) => [selectors.groupTypes, selectors.currentTeamId],
+            (groupTypes, teamId): TaxonomicFilterGroup[] =>
+                groupTypes.map((type, index) => ({
+                    name: capitalizeFirstLetter(type.group_type),
+                    type: `${TaxonomicFilterGroupType.GroupsPrefix}_${index}` as TaxonomicFilterGroupType,
+                    logic: groupPropertiesModel,
+                    value: `groupProperties_${index}`,
+                    valuesEndpoint: (key) =>
+                        `api/projects/${teamId}/groups/property_values/?${toParams({ key, group_type_index: index })}`,
+                    getName: (group) => capitalizeFirstLetter(group.name),
+                    getValue: (group) => group.name,
+                    groupTypeIndex: index,
+                })),
         ],
         value: [() => [(_, props) => props.value], (value) => value],
         groupType: [() => [(_, props) => props.groupType], (groupType) => groupType],
         currentTabIndex: [
-            (s) => [s.groupTypes, s.activeTab],
+            (s) => [s.taxonomicGroupTypes, s.activeTab],
             (groupTypes, activeTab) => Math.max(groupTypes.indexOf(activeTab || ''), 0),
         ],
     },
 
     listeners: ({ actions, values, props }) => ({
-        selectItem: ({ groupType, value, item }) => {
+        selectItem: ({ group, value, item }) => {
             if (item && value) {
-                props.onChange?.(groupType, value, item)
+                props.onChange?.(group, value, item)
             }
         },
 
@@ -115,15 +243,15 @@ export const taxonomicFilterLogic = kea<taxonomicFilterLogicType>({
         },
 
         tabLeft: () => {
-            const { currentTabIndex, groupTypes } = values
-            const newIndex = (currentTabIndex - 1 + groupTypes.length) % groupTypes.length
-            actions.setActiveTab(groupTypes[newIndex])
+            const { currentTabIndex, taxonomicGroupTypes } = values
+            const newIndex = (currentTabIndex - 1 + taxonomicGroupTypes.length) % taxonomicGroupTypes.length
+            actions.setActiveTab(taxonomicGroupTypes[newIndex])
         },
 
         tabRight: () => {
-            const { currentTabIndex, groupTypes } = values
-            const newIndex = (currentTabIndex + 1) % groupTypes.length
-            actions.setActiveTab(groupTypes[newIndex])
+            const { currentTabIndex, taxonomicGroupTypes } = values
+            const newIndex = (currentTabIndex + 1) % taxonomicGroupTypes.length
+            actions.setActiveTab(taxonomicGroupTypes[newIndex])
         },
     }),
 })
