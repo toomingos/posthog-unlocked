@@ -18,7 +18,7 @@ RUN apk --update --no-cache add \
     "bash~=5.1" \
     "g++~=10.3" \
     "gcc~=10.3" \
-    "libpq~=13.4" \
+    "libpq~=13" \
     "libxml2-dev~=2.9" \
     "libxslt~=1.1" \
     "libxslt-dev~=1.1" \
@@ -79,19 +79,30 @@ RUN apk --update --no-cache --virtual .build-deps add \
 # - we need few additional OS packages for this. Let's install
 #   and then uninstall them when the compilation is completed.
 COPY package.json yarn.lock ./
-COPY plugins/package.json plugins/yarn.lock ./plugins/
+COPY ./plugin-server/ ./plugin-server/
 RUN apk --update --no-cache --virtual .build-deps add \
     "gcc~=10.3" \
     && \
     yarn config set network-timeout 300000 && \
     yarn install --frozen-lockfile && \
-    yarn install --frozen-lockfile --cwd plugins && \
+    yarn install --frozen-lockfile --cwd plugin-server && \
     yarn cache clean \
     && \
     apk del .build-deps
 
 # Copy everything else
 COPY . .
+
+# Build the plugin server
+#
+# Note: we run the build as a separate actions to increase
+# the cache hit ratio of the layers above.
+# symlink musl -> ld-linux is required for re2 compat on alpine
+RUN cd plugin-server \
+    && ln -s /lib/ld-musl-x86_64.so.1 /lib/ld-linux-x86-64.so.2 \
+    && yarn build \
+    && yarn cache clean \
+    && cd ..
 
 # Build the frontend
 #
@@ -102,7 +113,7 @@ RUN yarn build && \
     rm -rf ./node_modules
 
 # Generate Django's static files
-RUN SECRET_KEY='unsafe secret key for collectstatic only' DATABASE_URL='postgres:///' REDIS_URL='redis:///' python manage.py collectstatic --noinput
+RUN SKIP_SERVICE_VERSION_REQUIREMENTS=1 SECRET_KEY='unsafe secret key for collectstatic only' DATABASE_URL='postgres:///' REDIS_URL='redis:///' python manage.py collectstatic --noinput
 
 # Add a dedicated 'posthog' user and group, move files into its home dir and set the
 # proper file permissions. This alleviates compliance issue for not running a
