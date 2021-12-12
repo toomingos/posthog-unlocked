@@ -4,39 +4,6 @@ import { ArrowUpOutlined } from '@ant-design/icons'
 
 import './icons.scss'
 
-export function IconExternalLink({ style }: { style?: CSSProperties }): JSX.Element {
-    return (
-        <svg width="1em" height="1em" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" style={style}>
-            <g clipPath="url(#clip0)">
-                <path
-                    d="M18.8614 14.5629C19.0932 14.8002 19.4101 14.9387 19.7441 14.9486C20.0782 14.9586 20.4029 14.8393 20.6489 14.6163L28.6771 7.33958C28.7082 7.31062 28.7494 7.29449 28.7922 7.29449C28.835 7.29449 28.8761 7.31062 28.9073 7.33958L30.2885 8.64768C30.3167 8.67449 30.3516 8.69343 30.3897 8.70254C30.4278 8.71165 30.4676 8.71062 30.5052 8.69954C30.5427 8.68846 30.5766 8.66774 30.6033 8.6395C30.63 8.61126 30.6487 8.57652 30.6573 8.53884C31.1031 6.61878 31.5493 4.69941 31.9958 2.78072C32.0025 2.7516 32.0019 2.72132 31.9941 2.69246C31.9863 2.66361 31.9715 2.63705 31.9511 2.61505C31.9306 2.59305 31.905 2.57627 31.8765 2.56614C31.848 2.55601 31.8175 2.55283 31.7875 2.55689L25.6781 3.48714C25.6461 3.49196 25.6161 3.5055 25.5914 3.52623C25.5668 3.54697 25.5485 3.57407 25.5386 3.60448C25.5288 3.6349 25.5278 3.66742 25.5356 3.69839C25.5435 3.72936 25.56 3.75754 25.5833 3.77976L26.9645 5.09608C26.981 5.11161 26.9941 5.13026 27.003 5.15091C27.012 5.17155 27.0166 5.19377 27.0166 5.21622C27.0166 5.23867 27.012 5.26088 27.003 5.28153C26.9941 5.30217 26.981 5.32082 26.9645 5.33635L18.9135 12.7681C18.7895 12.882 18.6896 13.019 18.6198 13.1712C18.5499 13.3234 18.5115 13.4878 18.5066 13.6548C18.5018 13.8218 18.5306 13.988 18.5916 14.1439C18.6525 14.2998 18.7442 14.4422 18.8614 14.5629Z"
-                    fill="currentColor"
-                />
-                <path
-                    d="M18.849 2H1.64375C0.73542 2 0 2.67356 0 3.50422V28.4989C0 29.3305 0.73542 30.0041 1.64375 30.0041H27.0729C27.9802 30.0041 28.7167 29.3305 28.7167 28.4989V16.9097C28.7167 16.4097 28.274 16.0041 27.7271 16.0041C27.1813 16.0041 26.7385 16.4148 26.7385 16.9097V27.8284C26.7376 27.8529 26.7318 27.8771 26.7214 27.8994C26.711 27.9217 26.6962 27.9418 26.6779 27.9585C26.6596 27.9751 26.6382 27.9881 26.6148 27.9966C26.5914 28.0051 26.5666 28.009 26.5417 28.0081H2.24688C2.19677 28.0097 2.14802 27.9918 2.11132 27.9581C2.07462 27.9244 2.05295 27.8778 2.05105 27.8284V4.09153C2.05186 4.06698 2.05755 4.04284 2.06783 4.02047C2.07811 3.9981 2.09278 3.97795 2.11096 3.96116C2.12915 3.94438 2.15051 3.9313 2.17383 3.92266C2.19715 3.91402 2.22198 3.90999 2.24688 3.91082H18.849C19.424 3.91082 19.8906 3.48471 19.8906 2.95797C19.8906 2.43124 19.424 2 18.849 2Z"
-                    fill="currentColor"
-                />
-            </g>
-            <defs>
-                <clipPath id="clip0">
-                    <rect width="32" height="32" fill="none" />
-                </clipPath>
-            </defs>
-        </svg>
-    )
-}
-
-export function IconExternalLinkBold({ style }: { style?: CSSProperties }): JSX.Element {
-    return (
-        <svg width="1em" height="1em" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" style={style}>
-            <path
-                d="M14.2222 14.2222H1.77778V1.77778H8V0H1.77778C0.791111 0 0 0.8 0 1.77778V14.2222C0 15.2 0.791111 16 1.77778 16H14.2222C15.2 16 16 15.2 16 14.2222V8H14.2222V14.2222ZM9.77778 0V1.77778H12.9689L4.23111 10.5156L5.48444 11.7689L14.2222 3.03111V6.22222H16V0H9.77778Z"
-                fill="currentColor"
-            />
-        </svg>
-    )
-}
-
 export function IconText({ style }: { style?: CSSProperties }): JSX.Element {
     return (
         <svg width="1em" height="1em" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" style={style}>
@@ -343,9 +310,9 @@ export function IconUpdate(): JSX.Element {
 }
 
 /** Material Design Offline Bolt icon. */
-export function IconOffline(): JSX.Element {
+export function IconOffline({ style }: { style?: CSSProperties }): JSX.Element {
     return (
-        <svg fill="none" width="1em" height="1em" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <svg fill="none" width="1em" height="1em" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style={style}>
             <path
                 d="m12 2.02c-5.51 0-9.98 4.47-9.98 9.98s4.47 9.98 9.98 9.98 9.98-4.47 9.98-9.98-4.47-9.98-9.98-9.98zm0 17.96c-4.4 0-7.98-3.58-7.98-7.98s3.58-7.98 7.98-7.98 7.98 3.58 7.98 7.98-3.58 7.98-7.98 7.98zm.75-14.98-4.5 8.5h3.14v5.5l4.36-8.5h-3z"
                 fill="currentColor"
@@ -381,6 +348,18 @@ export function IconMenuOpen(): JSX.Element {
         <svg fill="none" width="1em" height="1em" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
             <path
                 d="m3 18h13v-2h-13zm0-5h10v-2h-10zm0-7v2h13v-2zm18 9.59-3.58-3.59 3.58-3.59-1.41-1.41-5 5 5 5z"
+                fill="currentColor"
+            />
+        </svg>
+    )
+}
+
+/** Material Design Sync icon. */
+export function IconSync(props: React.SVGProps<SVGSVGElement>): JSX.Element {
+    return (
+        <svg fill="none" width="1em" height="1em" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" {...props}>
+            <path
+                d="m12.5 4v-3l-4 4 4 4v-3c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46c.78-1.23 1.24-2.69 1.24-4.26 0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8l-1.46-1.46c-.78 1.23-1.24 2.69-1.24 4.26 0 4.42 3.58 8 8 8v3l4-4-4-4z"
                 fill="currentColor"
             />
         </svg>
@@ -579,6 +558,18 @@ export function IconHelpOutline(props: React.SVGProps<SVGSVGElement>): JSX.Eleme
     )
 }
 
+/** Material Design Info icon. */
+export function IconInfo(props: React.SVGProps<SVGSVGElement>): JSX.Element {
+    return (
+        <svg fill="none" width="1em" height="1em" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" {...props}>
+            <path
+                d="m11 7h2v2h-2zm0 4h2v6h-2zm1-9c-5.52 0-10 4.48-10 10s4.48 10 10 10 10-4.48 10-10-4.48-10-10-10zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"
+                fill="currentColor"
+            />
+        </svg>
+    )
+}
+
 /** Material Design Mail icon. */
 export function IconMail(): JSX.Element {
     return (
@@ -628,9 +619,22 @@ export function IconEllipsis(props: React.SVGProps<SVGSVGElement>): JSX.Element 
 /** Material Design Content Copy icon. */
 export function IconCopy(props: React.SVGProps<SVGSVGElement>): JSX.Element {
     return (
-        <svg fill="none" height="24" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg" {...props}>
+        <svg fill="none" width="1em" height="1em" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" {...props}>
             <path
                 d="m15.4545 3h-9.81814c-.9 0-1.63636.73636-1.63636 1.63636v11.45454h1.63636v-11.45454h9.81814zm2.4546 3.27273h-9.00001c-.9 0-1.63636.73636-1.63636 1.63636v11.45451c0 .9.73636 1.6364 1.63636 1.6364h9.00001c.9 0 1.6364-.7364 1.6364-1.6364v-11.45451c0-.9-.7364-1.63636-1.6364-1.63636zm0 13.09087h-9.00001v-11.45451h9.00001z"
+                fill="currentColor"
+            />
+        </svg>
+    )
+}
+
+/** Material Design Open In New icon. */
+export function IconOpenInNew(props: React.SVGProps<SVGSVGElement>): JSX.Element {
+    return (
+        <svg width="1em" height="1em" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" {...props}>
+            <path d="m0 0h24v24h-24z" fill="none" />
+            <path
+                d="m19 19h-14v-14h7v-2h-7c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-5-16v2h3.59l-9.83 9.83 1.41 1.41 9.83-9.83v3.59h2v-7z"
                 fill="currentColor"
             />
         </svg>
@@ -676,11 +680,12 @@ interface InsightIconProps {
     background?: string
     noBackground?: boolean
     children?: React.ReactNode
+    style: CSSProperties
 }
-function InsightIcon({ background = '#747EA2', noBackground = false, children }: InsightIconProps): JSX.Element {
+function InsightIcon({ background = '#747EA2', noBackground = false, children, style }: InsightIconProps): JSX.Element {
     return (
-        <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-            {!noBackground ? <rect width="32" height="32" rx="4" fill={background} /> : null}
+        <svg width="1em" height="1em" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" style={style}>
+            {!noBackground ? <rect width="100%" height="100%" rx="4" fill={background} /> : null}
             {children}
         </svg>
     )
@@ -689,13 +694,9 @@ function InsightIcon({ background = '#747EA2', noBackground = false, children }:
 interface InsightIconInstanceProps extends Omit<InsightIconProps, 'children'> {
     color?: string
 }
-export function InsightsTrendsIcon({
-    color = 'white',
-    background = '#747EA2',
-    noBackground = false,
-}: InsightIconInstanceProps): JSX.Element {
+export function InsightsTrendsIcon({ color = 'white', ...props }: InsightIconInstanceProps): JSX.Element {
     return (
-        <InsightIcon background={background} noBackground={noBackground}>
+        <InsightIcon {...props}>
             <path
                 d="M7.5 22.4898L13.5 16.4798L17.5 20.4798L26 10.9198L24.59 9.50977L17.5 17.4798L13.5 13.4798L6 20.9898L7.5 22.4898Z"
                 fill={color}
@@ -704,13 +705,9 @@ export function InsightsTrendsIcon({
     )
 }
 
-export function InsightsFunnelsIcon({
-    color = 'white',
-    background = '#747EA2',
-    noBackground = false,
-}: InsightIconInstanceProps): JSX.Element {
+export function InsightsFunnelsIcon({ color = 'white', ...props }: InsightIconInstanceProps): JSX.Element {
     return (
-        <InsightIcon background={background} noBackground={noBackground}>
+        <InsightIcon {...props}>
             <path
                 d="M9 9.2002H12V23.0002H9V9.2002ZM14.6 13.0002H17.4V23.0002H14.6V13.0002ZM20.2 17.0002H23V23.0002H20.2V17.0002Z"
                 fill={color}
@@ -719,13 +716,9 @@ export function InsightsFunnelsIcon({
     )
 }
 
-export function InsightsSessionsIcon({
-    color = 'white',
-    background = '#747EA2',
-    noBackground = false,
-}: InsightIconInstanceProps): JSX.Element {
+export function InsightsSessionsIcon({ color = 'white', ...props }: InsightIconInstanceProps): JSX.Element {
     return (
-        <InsightIcon background={background} noBackground={noBackground}>
+        <InsightIcon {...props}>
             <path
                 d="M9 8H23C24.11 8 25 8.9 25 10V14H23V12H9V22H11V24H9C7.89 24 7 23.1 7 22V10C7 8.9 7.89 8 9 8Z"
                 fill={color}
@@ -738,13 +731,9 @@ export function InsightsSessionsIcon({
     )
 }
 
-export function InsightsRetentionIcon({
-    color = 'white',
-    background = '#747EA2',
-    noBackground = false,
-}: InsightIconInstanceProps): JSX.Element {
+export function InsightsRetentionIcon({ color = 'white', ...props }: InsightIconInstanceProps): JSX.Element {
     return (
-        <InsightIcon background={background} noBackground={noBackground}>
+        <InsightIcon {...props}>
             <path
                 fillRule="evenodd"
                 clipRule="evenodd"
@@ -755,13 +744,9 @@ export function InsightsRetentionIcon({
     )
 }
 
-export function InsightsPathsIcon({
-    color = 'white',
-    background = '#747EA2',
-    noBackground = false,
-}: InsightIconInstanceProps): JSX.Element {
+export function InsightsPathsIcon({ color = 'white', ...props }: InsightIconInstanceProps): JSX.Element {
     return (
-        <InsightIcon background={background} noBackground={noBackground}>
+        <InsightIcon {...props}>
             <path
                 d="M13.5 9.5C14.6 9.5 15.5 8.6 15.5 7.5C15.5 6.4 14.6 5.5 13.5 5.5C12.4 5.5 11.5 6.4 11.5 7.5C11.5 8.6 12.4 9.5 13.5 9.5ZM9.75 12.9L7 27H9.1L10.85 19L13 21V27H15V19.45L12.95 17.4L13.55 14.4C14.85 16 16.8 17 19 17V15C17.15 15 15.55 14 14.65 12.55L13.7 10.95C13.35 10.35 12.7 10 12 10C11.75 10 11.5 10.05 11.25 10.15L6 12.3V17H8V13.65L9.75 12.9ZM17 6V13H20.75V27H22.25V13H26V6H17ZM22.01 12V10.25H18.5V8.75H22.01V7L24.5 9.5L22.01 12Z"
                 fill={color}
@@ -770,13 +755,9 @@ export function InsightsPathsIcon({
     )
 }
 
-export function InsightsStickinessIcon({
-    color = 'white',
-    background = '#747EA2',
-    noBackground = false,
-}: InsightIconInstanceProps): JSX.Element {
+export function InsightsStickinessIcon({ color = 'white', ...props }: InsightIconInstanceProps): JSX.Element {
     return (
-        <InsightIcon background={background} noBackground={noBackground}>
+        <InsightIcon {...props}>
             <path
                 d="M8 22V21.35C8 21.01 8.16 20.69 8.41 20.54C10.1 19.53 12.03 19 14 19C14.03 19 14.05 19 14.08 19.01C14.18 18.31 14.38 17.64 14.67 17.03C14.45 17.01 14.23 17 14 17C11.58 17 9.32 17.67 7.39 18.82C6.51 19.34 6 20.32 6 21.35V24H15.26C14.84 23.4 14.51 22.72 14.29 22H8Z"
                 fill={color}
@@ -797,13 +778,9 @@ export function InsightsStickinessIcon({
     )
 }
 
-export function InsightsLifecycleIcon({
-    color = 'white',
-    background = '#747EA2',
-    noBackground = false,
-}: InsightIconInstanceProps): JSX.Element {
+export function InsightsLifecycleIcon({ color = 'white', ...props }: InsightIconInstanceProps): JSX.Element {
     return (
-        <InsightIcon background={background} noBackground={noBackground}>
+        <InsightIcon {...props}>
             <path
                 d="M10 14H13V24H10V14ZM10 9H13V13H10V9ZM20 20H23V24H20V20ZM20 17H23V19H20V17ZM15 17H18V24H15V17ZM15 13H18V16H15V13Z"
                 fill={color}
@@ -874,6 +851,74 @@ export function EventIcon(): JSX.Element {
         <svg width="1em" height="1em" viewBox="0 0 20 10" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path
                 d="M7.4 10.6L2.8 6L7.4 1.4L6 0L0 6L6 12L7.4 10.6ZM12.6 10.6L17.2 6L12.6 1.4L14 0L20 6L14 12L12.6 10.6Z"
+                fill="currentColor"
+            />
+        </svg>
+    )
+}
+
+/** Material Design light bulb icon. */
+export function IconLightBulb(props: React.SVGProps<SVGSVGElement>): JSX.Element {
+    return (
+        <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" {...props}>
+            <path
+                d="M12,2A7,7 0 0,0 5,9C5,11.38 6.19,13.47 8,14.74V17A1,1 0 0,0 9,18H15A1,1 0 0,0 16,17V14.74C17.81,13.47 19,11.38 19,9A7,7 0 0,0 12,2M9,21A1,1 0 0,0 10,22H14A1,1 0 0,0 15,21V20H9V21Z"
+                fill="currentColor"
+            />
+        </svg>
+    )
+}
+
+/** Material Design Close icon. */
+export function IconClose(props: React.SVGProps<SVGSVGElement>): JSX.Element {
+    return (
+        <svg xmlns="http://www.w3.org/2000/svg" version="1.1" width="1em" height="1em" viewBox="0 0 24 24" {...props}>
+            <path
+                d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z"
+                fill="currentColor"
+            />
+        </svg>
+    )
+}
+
+/** Material Design Keyboard icon. */
+export function IconKeyboard(props: React.SVGProps<SVGSVGElement>): JSX.Element {
+    return (
+        <svg
+            xmlns="http://www.w3.org/2000/svg"
+            height="1em"
+            viewBox="0 0 24 24"
+            width="1em"
+            fill="currentColor"
+            {...props}
+        >
+            <path d="M20 5H4c-1.1 0-1.99.9-1.99 2L2 17c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm-9 3h2v2h-2V8zm0 3h2v2h-2v-2zM8 8h2v2H8V8zm0 3h2v2H8v-2zm-1 2H5v-2h2v2zm0-3H5V8h2v2zm9 7H8v-2h8v2zm0-4h-2v-2h2v2zm0-3h-2V8h2v2zm3 3h-2v-2h2v2zm0-3h-2V8h2v2z" />
+            <path d="M0 0h24v24H0zm0 0h24v24H0z" fill="none" />
+        </svg>
+    )
+}
+
+/** Material Design Search icon. */
+export function IconMagnifier(props: React.SVGProps<SVGSVGElement>): JSX.Element {
+    return (
+        <svg
+            width="1em"
+            height="1em"
+            viewBox="0 0 18 18"
+            xmlns="http://www.w3.org/2000/svg"
+            fill="currentColor"
+            {...props}
+        >
+            <path d="M12.5 11H11.71L11.43 10.73C12.41 9.59 13 8.11 13 6.5C13 2.91 10.09 0 6.5 0C2.91 0 0 2.91 0 6.5C0 10.09 2.91 13 6.5 13C8.11 13 9.59 12.41 10.73 11.43L11 11.71V12.5L16 17.49L17.49 16L12.5 11ZM6.5 11C4.01 11 2 8.99 2 6.5C2 4.01 4.01 2 6.5 2C8.99 2 11 4.01 11 6.5C11 8.99 8.99 11 6.5 11Z" />
+        </svg>
+    )
+}
+
+export function IconLegend({ style }: { style?: CSSProperties }): JSX.Element {
+    return (
+        <svg width="1em" height="1em" viewBox="0 0 18 18" fill="none" style={style} xmlns="http://www.w3.org/2000/svg">
+            <path
+                d="M8 4H14V6H8V4ZM8 8H14V10H8V8ZM8 12H14V14H8V12ZM4 4H6V6H4V4ZM4 8H6V10H4V8ZM4 12H6V14H4V12ZM17.1 0H0.9C0.4 0 0 0.4 0 0.9V17.1C0 17.5 0.4 18 0.9 18H17.1C17.5 18 18 17.5 18 17.1V0.9C18 0.4 17.5 0 17.1 0ZM16 16H2V2H16V16Z"
                 fill="currentColor"
             />
         </svg>

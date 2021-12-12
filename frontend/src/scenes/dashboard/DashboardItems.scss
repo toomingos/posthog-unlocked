@@ -67,10 +67,6 @@
 
     // sync this with lib/colors.js
 
-    .loading-overlay {
-        background: transparent;
-    }
-
     &.blue {
         --item-background: hsl(212, 63%, 40%);
         --item-darker: hsl(212, 63%, 35%);
@@ -107,9 +103,6 @@
     &.purple,
     &.green,
     &.black {
-        .loading-overlay {
-            filter: brightness(300%);
-        }
         color: white;
         background: var(--item-background);
         .dashboard-item-header .dashboard-item-title a {
@@ -171,7 +164,7 @@
 .react-grid-layout {
     position: relative;
     transition: height 200ms ease;
-    margin-bottom: 50px;
+    margin-bottom: 2rem;
 
     /* remove initial loading animation, animations are only needed in edit mode */
     &.dashboard-view-mode .react-grid-item {
@@ -188,6 +181,9 @@
 .react-grid-item.resizing {
     z-index: 1;
     will-change: width, height;
+    .dashboard-item {
+        border-color: var(--primary);
+    }
 }
 
 .react-grid-item.react-draggable-dragging {
@@ -201,10 +197,9 @@
 }
 
 .react-grid-item.react-grid-placeholder {
-    background: rgba(0, 0, 0, 0.15);
-    filter: blur(6px);
-    border-radius: 5px;
-    transition-duration: 100ms;
+    position: relative;
+    border: 1px solid var(--border-dark);
+    border-radius: var(--radius);
     z-index: 2;
     user-select: none;
 }

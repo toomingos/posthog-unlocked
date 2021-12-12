@@ -1,29 +1,16 @@
-import React, { CSSProperties, useMemo, useState } from 'react'
+import React, { useMemo, useState } from 'react'
 
 import { keyMappingKeys, PropertyKeyInfo } from './PropertyKeyInfo'
-import { Dropdown, Input, Menu, Popconfirm, Table } from 'antd'
-import { NumberOutlined, BulbOutlined, StopOutlined, DeleteOutlined } from '@ant-design/icons'
+import { Dropdown, Input, Menu, Popconfirm } from 'antd'
+import { DeleteOutlined } from '@ant-design/icons'
 import { isURL } from 'lib/utils'
-import stringWithWBR from 'lib/utils/stringWithWBR'
-import { IconExternalLink, IconText } from 'lib/components/icons'
-import { Tooltip } from 'lib/components/Tooltip'
+import { IconOpenInNew } from 'lib/components/icons'
 import './PropertiesTable.scss'
-import { CopyOutlined } from '@ant-design/icons'
-import { copyToClipboard } from 'lib/utils'
+import { LemonTable, LemonTableColumns } from './LemonTable'
+import { CopyToClipboardInline } from './CopyToClipboard'
 
 type HandledType = 'string' | 'number' | 'bigint' | 'boolean' | 'undefined' | 'null'
 type Type = HandledType | 'symbol' | 'object' | 'function'
-
-const iconStyle: CSSProperties = { display: 'inline-block', marginRight: '0.5rem', opacity: 0.75 }
-
-const typeToIcon: Record<HandledType, JSX.Element> = {
-    string: <IconText />,
-    number: <NumberOutlined />,
-    bigint: <NumberOutlined />,
-    boolean: <BulbOutlined />,
-    undefined: <StopOutlined />,
-    null: <StopOutlined />,
-}
 
 interface BasePropertyType {
     rootKey?: string // The key name of the object if it's nested
@@ -61,26 +48,7 @@ function ValueDisplay({ value, rootKey, onEdit, nestingLevel }: ValueDisplayType
     const boolNullTypes = ['boolean', 'null'] // Values that are edited with the boolNullSelect dropdown
 
     const valueType: Type = value === null ? 'null' : typeof value // typeof null returns 'object' ¯\_(ツ)_/¯
-
-    const boolNullSelect = (
-        <Menu
-            onClick={({ key }) => {
-                let val = null
-                if (key === 't') {
-                    val = true
-                } else if (key === 'f') {
-                    val = false
-                }
-                handleValueChange(val, true)
-            }}
-        >
-            <Menu.Item key="t">true</Menu.Item>
-            <Menu.Item key="f">false</Menu.Item>
-            <Menu.Item key="n" danger>
-                null
-            </Menu.Item>
-        </Menu>
-    )
+    const valueString: string = value === null ? 'null' : String(value) // typeof null returns 'object' ¯\_(ツ)_/¯
 
     const handleValueChange = (newValue: any, save: boolean): void => {
         setEditing(false)
@@ -94,47 +62,59 @@ function ValueDisplay({ value, rootKey, onEdit, nestingLevel }: ValueDisplayType
             className={canEdit ? 'editable ph-no-capture' : 'ph-no-capture'}
             onClick={() => canEdit && textBasedTypes.includes(valueType) && setEditing(true)}
         >
-            {stringWithWBR(String(value))}
+            {!isURL(value) ? (
+                valueString
+            ) : (
+                <a href={value} target="_blank" rel="noopener noreferrer" className="value-link">
+                    <span>{valueString}</span>
+                    <IconOpenInNew />
+                </a>
+            )}
         </span>
     )
 
     return (
         <div className="properties-table-value">
-            {typeToIcon[valueType as HandledType] ? (
+            {!editing ? (
                 <>
-                    {!editing ? (
-                        <>
-                            <div style={iconStyle}>
-                                <Tooltip title={`Property of type ${valueType}.`}>
-                                    <span>{typeToIcon[valueType as HandledType]}</span>
-                                </Tooltip>
-                            </div>
-                            {canEdit && boolNullTypes.includes(valueType) ? (
-                                <Dropdown overlay={boolNullSelect}>{valueComponent}</Dropdown>
-                            ) : (
-                                <>
-                                    {valueComponent}
-                                    <CopyOutlined
-                                        style={{ marginLeft: 4, color: 'var(--primary)' }}
-                                        onClick={() => {
-                                            copyToClipboard(value)
-                                        }}
-                                    />
-                                </>
-                            )}
-
-                            {isURL(value) && (
-                                <a href={value} target="_blank" rel="noopener noreferrer" style={{ marginLeft: 4 }}>
-                                    <IconExternalLink />
-                                </a>
-                            )}
-                        </>
+                    {canEdit && boolNullTypes.includes(valueType) ? (
+                        <Dropdown
+                            overlay={
+                                <Menu
+                                    onClick={({ key }) => {
+                                        let val = null
+                                        if (key === 't') {
+                                            val = true
+                                        } else if (key === 'f') {
+                                            val = false
+                                        }
+                                        handleValueChange(val, true)
+                                    }}
+                                >
+                                    <Menu.Item key="t">true</Menu.Item>
+                                    <Menu.Item key="f">false</Menu.Item>
+                                    <Menu.Item key="n" danger>
+                                        null
+                                    </Menu.Item>
+                                </Menu>
+                            }
+                        >
+                            {valueComponent}
+                        </Dropdown>
                     ) : (
-                        <EditTextValueComponent value={value} onChange={handleValueChange} />
+                        <CopyToClipboardInline
+                            description="property value"
+                            explicitValue={valueString}
+                            selectable
+                            isValueSensitive
+                        >
+                            {valueComponent}
+                        </CopyToClipboardInline>
                     )}
+                    <div className="property-value-type">{valueType}</div>
                 </>
             ) : (
-                value
+                <EditTextValueComponent value={value} onChange={handleValueChange} />
             )}
         </div>
     )
@@ -173,10 +153,25 @@ export function PropertiesTable({
         })
     }, [properties, sortProperties])
 
-    const columns = [
+    if (Array.isArray(properties)) {
+        return (
+            <div>
+                {properties.length ? (
+                    properties.map((item, index) => (
+                        <PropertiesTable key={index} properties={item} nestingLevel={nestingLevel + 1} />
+                    ))
+                ) : (
+                    <div className="property-value-type">ARRAY (EMPTY)</div>
+                )}
+            </div>
+        )
+    }
+
+    const columns: LemonTableColumns<Record<string, any>> = [
         {
             title: 'key',
-            render: function Key(item: any): JSX.Element {
+            width: '15rem',
+            render: function Key(_, item: any): JSX.Element {
                 return (
                     <div className="properties-table-key">
                         {onDelete && nestingLevel <= 1 && !keyMappingKeys.includes(item[0]) && (
@@ -198,7 +193,7 @@ export function PropertiesTable({
         },
         {
             title: 'value',
-            render: function Value(item: any): JSX.Element {
+            render: function Value(_, item: any): JSX.Element {
                 return (
                     <PropertiesTable
                         properties={item[1]}
@@ -211,29 +206,17 @@ export function PropertiesTable({
         },
     ]
 
-    if (Array.isArray(properties)) {
-        return (
-            <div>
-                {properties.map((item, index) => (
-                    <span key={index}>
-                        <PropertiesTable properties={item} nestingLevel={nestingLevel + 1} />
-                        <br />
-                    </span>
-                ))}
-            </div>
-        )
-    }
     if (properties instanceof Object) {
         return (
-            <Table
+            <LemonTable
                 columns={columns}
                 showHeader={false}
-                rowKey={(item) => item[0]}
                 size="small"
-                pagination={false}
+                rowKey="0"
+                embedded
                 dataSource={objectProperties}
                 className={className}
-                locale={{ emptyText: 'This property contains an empty object.' }}
+                emptyState="This property contains an empty object."
             />
         )
     }

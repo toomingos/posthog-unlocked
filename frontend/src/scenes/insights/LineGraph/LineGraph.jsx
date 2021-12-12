@@ -14,8 +14,6 @@ import { useEscapeKey } from 'lib/hooks/useEscapeKey'
 import './LineGraph.scss'
 import { InsightLabel } from 'lib/components/InsightLabel'
 import { InsightTooltip } from '../InsightTooltip/InsightTooltip'
-import { featureFlagLogic } from 'lib/logic/featureFlagLogic'
-import { FEATURE_FLAGS } from 'lib/constants'
 import { dayjs } from 'lib/dayjs'
 
 //--Chart Style Options--//
@@ -42,6 +40,7 @@ export function LineGraph({
     totalValue,
     showPersonsModal = true,
     tooltipPreferAltTitle = false,
+    isCompare = false,
 }) {
     const chartRef = useRef()
     const myLineChart = useRef()
@@ -67,7 +66,6 @@ export function LineGraph({
     const [annotationInRange, setInRange] = useState(false)
     const [tooltipVisible, setTooltipVisible] = useState(false)
     const size = useWindowSize()
-    const { featureFlags } = useValues(featureFlagLogic)
 
     const annotationsCondition =
         type === 'line' && datasets?.length > 0 && !inSharedMode && datasets[0].labels?.[0] !== '1 day' // stickiness graphs
@@ -142,7 +140,7 @@ export function LineGraph({
     }
 
     function processDataset(dataset, index) {
-        const colorList = getChartColors(color || 'white')
+        const colorList = getChartColors(color || 'white', datasets.length, isCompare)
         const mainColor = dataset?.status ? getBarColorFromStatus(dataset.status) : colorList[index % colorList.length]
         const hoverColor = dataset?.status ? getBarColorFromStatus(dataset.status, true) : mainColor
 
@@ -280,7 +278,7 @@ export function LineGraph({
                                     : entityData.breakdown_value
                             }
                             seriesStatus={entityData.status}
-                            useCustomName={!!featureFlags[FEATURE_FLAGS.RENAME_FILTERS]}
+                            useCustomName
                         />
                     )
                 },

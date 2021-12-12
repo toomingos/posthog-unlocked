@@ -1,12 +1,11 @@
 import dayjs from 'dayjs'
 import { kea } from 'kea'
 import api from 'lib/api'
-import { FEATURE_FLAGS } from 'lib/constants'
-import { featureFlagLogic } from 'lib/logic/featureFlagLogic'
 import { eventUsageLogic } from 'lib/utils/eventUsageLogic'
 import { systemStatusLogic } from 'scenes/instance/SystemStatus/systemStatusLogic'
 import { organizationLogic } from 'scenes/organizationLogic'
 import { preflightLogic } from 'scenes/PreflightCheck/logic'
+import { sceneLogic } from 'scenes/sceneLogic'
 import { teamLogic } from 'scenes/teamLogic'
 import { userLogic } from 'scenes/userLogic'
 import { VersionType } from '~/types'
@@ -23,12 +22,11 @@ type WarningType =
 export const navigationLogic = kea<navigationLogicType<WarningType>>({
     path: ['layout', 'navigation', 'navigationLogic'],
     connect: {
-        values: [featureFlagLogic, ['featureFlags']],
+        values: [sceneLogic, ['sceneConfig']],
     },
     actions: {
         toggleSideBar: true,
         hideSideBar: true,
-        hideAnnouncement: true,
         openSitePopover: true,
         closeSitePopover: true,
         toggleSitePopover: true,
@@ -50,12 +48,6 @@ export const navigationLogic = kea<navigationLogicType<WarningType>>({
             {
                 toggleSideBar: (state) => !state,
                 hideSideBar: () => false,
-            },
-        ],
-        isAnnouncementShown: [
-            true,
-            {
-                hideAnnouncement: () => false,
             },
         ],
         isSitePopoverOpen: [
@@ -108,20 +100,15 @@ export const navigationLogic = kea<navigationLogicType<WarningType>>({
             },
         ],
     },
+    windowValues: () => ({
+        fullscreen: (window) => !!window.document.fullscreenElement,
+    }),
     selectors: {
-        isSideBarForciblyHidden: [() => [() => document.fullscreenElement], (fullscreenElement) => !!fullscreenElement],
+        /** `bareNav` whether the current scene should display a sidebar at all */
+        bareNav: [(s) => [s.fullscreen, s.sceneConfig], (fullscreen, sceneConfig) => fullscreen || sceneConfig?.plain],
         isSideBarShown: [
-            (s) => [s.isSideBarShownRaw, s.isSideBarForciblyHidden],
-            (isSideBarShownRaw, isSideBarForciblyHidden) => isSideBarShownRaw && !isSideBarForciblyHidden,
-        ],
-        announcementMessage: [
-            (s) => [s.featureFlags],
-            (featureFlags): string | null => {
-                const flagValue = featureFlags[FEATURE_FLAGS.CLOUD_ANNOUNCEMENT]
-                return flagValue && typeof flagValue === 'string'
-                    ? featureFlags[FEATURE_FLAGS.CLOUD_ANNOUNCEMENT]
-                    : null
-            },
+            (s) => [s.isSideBarShownRaw, s.bareNav],
+            (isSideBarShownRaw, bareNav) => isSideBarShownRaw && !bareNav,
         ],
         systemStatus: [
             () => [

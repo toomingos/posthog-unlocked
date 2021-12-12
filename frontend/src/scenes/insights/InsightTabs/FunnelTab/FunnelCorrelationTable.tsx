@@ -16,6 +16,8 @@ import { eventUsageLogic } from 'lib/utils/eventUsageLogic'
 import { VisibilitySensor } from 'lib/components/VisibilitySensor/VisibilitySensor'
 import { LemonButton } from 'lib/components/LemonButton'
 import { Popup } from 'lib/components/Popup/Popup'
+import { CorrelationMatrix } from './CorrelationMatrix'
+import { capitalizeFirstLetter } from 'lib/utils'
 
 export function FunnelCorrelationTable(): JSX.Element | null {
     const { insightProps } = useValues(insightLogic)
@@ -31,8 +33,9 @@ export function FunnelCorrelationTable(): JSX.Element | null {
         eventWithPropertyCorrelationsLoading,
         nestedTableExpandedKeys,
         correlationPropKey,
+        filters,
+        aggregationTargetLabel,
     } = useValues(logic)
-
     const {
         setCorrelationTypes,
         loadEventWithPropertyCorrelations,
@@ -84,7 +87,8 @@ export function FunnelCorrelationTable(): JSX.Element | null {
                     )}
                 </h4>
                 <div>
-                    People who converted were{' '}
+                    {capitalizeFirstLetter(aggregationTargetLabel.plural)}{' '}
+                    {filters.aggregation_group_type_index != undefined ? 'that' : 'who'} converted were{' '}
                     <mark>
                         <b>
                             {get_friendly_numeric_value(record.odds_ratio)}x {is_success ? 'more' : 'less'} likely
@@ -95,6 +99,7 @@ export function FunnelCorrelationTable(): JSX.Element | null {
                         ? 'have this event property'
                         : 'do this event'}
                 </div>
+                <CorrelationMatrix />
             </>
         )
     }
@@ -158,7 +163,6 @@ export function FunnelCorrelationTable(): JSX.Element | null {
                         key="eventName"
                         render={(_, record: FunnelCorrelation) => renderOddsRatioTextRecord(record)}
                         align="left"
-                        width="80%"
                     />
                     <Column
                         title="Completed"
@@ -171,7 +175,7 @@ export function FunnelCorrelationTable(): JSX.Element | null {
                         title="Dropped off"
                         key="failure_count"
                         render={(_, record: FunnelCorrelation) => renderFailureCount(record)}
-                        width={100}
+                        width={120}
                         align="center"
                     />
 
@@ -180,6 +184,7 @@ export function FunnelCorrelationTable(): JSX.Element | null {
                         key="actions"
                         render={(_, record: FunnelCorrelation) => <CorrelationActionsCell record={record} />}
                         align="center"
+                        width={30}
                     />
                 </Table>
             </div>
@@ -251,10 +256,13 @@ export function FunnelCorrelationTable(): JSX.Element | null {
                     expandable={{
                         expandedRowRender: (record) => renderNestedTable(record.event.event),
                         expandedRowKeys: nestedTableExpandedKeys,
-                        rowExpandable: () => true,
+                        rowExpandable: () => filters.aggregation_group_type_index === undefined,
                         /* eslint-disable react/display-name */
-                        expandIcon: ({ expanded, onExpand, record }) =>
-                            expanded ? (
+                        expandIcon: ({ expanded, onExpand, record, expandable }) => {
+                            if (!expandable) {
+                                return null
+                            }
+                            return expanded ? (
                                 <Tooltip title="Collapse">
                                     <div
                                         style={{ cursor: 'pointer', opacity: 0.5, fontSize: 24 }}
@@ -280,7 +288,8 @@ export function FunnelCorrelationTable(): JSX.Element | null {
                                         <IconUnfoldMore />
                                     </div>
                                 </Tooltip>
-                            ),
+                            )
+                        },
                         /* eslint-enable react/display-name */
                     }}
                 >
@@ -289,14 +298,17 @@ export function FunnelCorrelationTable(): JSX.Element | null {
                         key="eventName"
                         render={(_, record: FunnelCorrelation) => renderOddsRatioTextRecord(record)}
                         align="left"
-                        width="60%"
                         ellipsis
                     />
                     <Column
                         title={
                             <div className="flex-center">
                                 Completed
-                                <Tooltip title="Users who performed the event and completed the entire funnel.">
+                                <Tooltip
+                                    title={`${capitalizeFirstLetter(aggregationTargetLabel.plural)} ${
+                                        filters.aggregation_group_type_index != undefined ? 'that' : 'who'
+                                    } performed the event and completed the entire funnel.`}
+                                >
                                     <InfoCircleOutlined className="column-info" />
                                 </Tooltip>
                             </div>
@@ -313,7 +325,9 @@ export function FunnelCorrelationTable(): JSX.Element | null {
                                 <Tooltip
                                     title={
                                         <>
-                                            Users who performed the event and did <b>not complete</b> the entire funnel.
+                                            {capitalizeFirstLetter(aggregationTargetLabel.plural)}{' '}
+                                            {filters.aggregation_group_type_index != undefined ? 'that' : 'who'}{' '}
+                                            performed the event and did <b>not complete</b> the entire funnel.
                                         </>
                                     }
                                 >
@@ -328,8 +342,9 @@ export function FunnelCorrelationTable(): JSX.Element | null {
                     />
                     <Column
                         title=""
-                        key="operation"
+                        key="actions"
                         render={(_, record: FunnelCorrelation) => <CorrelationActionsCell record={record} />}
+                        width={30}
                     />
                 </Table>
             </div>
@@ -340,7 +355,7 @@ export function FunnelCorrelationTable(): JSX.Element | null {
 const CorrelationActionsCell = ({ record }: { record: FunnelCorrelation }): JSX.Element => {
     const { insightProps } = useValues(insightLogic)
     const logic = funnelLogic(insightProps)
-    const { excludeEventPropertyFromProject, excludeEventFromProject } = useActions(logic)
+    const { excludeEventPropertyFromProject, excludeEventFromProject, setFunnelCorrelationDetails } = useActions(logic)
     const { isEventPropertyExcluded, isEventExcluded } = useValues(logic)
     const components = record.event.event.split('::')
     const [popoverOpen, setPopoverOpen] = useState(false)
@@ -353,6 +368,11 @@ const CorrelationActionsCell = ({ record }: { record: FunnelCorrelation }): JSX.
                 onClickOutside={() => setPopoverOpen(false)}
                 overlay={
                     <>
+                        {record.result_type === FunnelCorrelationResultsType.Events && (
+                            <LemonButton onClick={() => setFunnelCorrelationDetails(record)} fullWidth type="stealth">
+                                View correlation details
+                            </LemonButton>
+                        )}
                         <LemonButton
                             disabled={
                                 record.result_type === FunnelCorrelationResultsType.EventWithProperties
@@ -366,13 +386,14 @@ const CorrelationActionsCell = ({ record }: { record: FunnelCorrelation }): JSX.
                             }
                             fullWidth
                             title="Remove this event from any correlation analysis report in this project."
+                            type="stealth"
                         >
                             Exclude event from project
                         </LemonButton>
                     </>
                 }
             >
-                <LemonButton type="stealth" style={{ paddingLeft: 0 }} onClick={() => setPopoverOpen(!popoverOpen)}>
+                <LemonButton type="stealth" onClick={() => setPopoverOpen(!popoverOpen)}>
                     <EllipsisOutlined
                         style={{ color: 'var(--primary)', fontSize: 24 }}
                         className="insight-dropdown-actions"

@@ -2,7 +2,17 @@ import React, { CSSProperties, PropsWithChildren } from 'react'
 import api from './api'
 import { toast } from 'react-toastify'
 import { Button } from 'antd'
-import { EventType, FilterType, ActionFilter, IntervalType, ItemMode, DashboardMode, dateMappingOption } from '~/types'
+import {
+    EventType,
+    FilterType,
+    ActionFilter,
+    IntervalType,
+    ItemMode,
+    DashboardMode,
+    dateMappingOption,
+    GroupActorType,
+    ActorType,
+} from '~/types'
 import { tagColors } from 'lib/colors'
 import { CustomerServiceOutlined, ExclamationCircleOutlined } from '@ant-design/icons'
 import { WEBHOOK_SERVICES } from 'lib/constants'
@@ -255,7 +265,15 @@ export function SceneLoading(): JSX.Element {
     )
 }
 
-export function deleteWithUndo({ undo = false, ...props }: Record<string, any>): void {
+export function deleteWithUndo({
+    undo = false,
+    ...props
+}: {
+    undo?: boolean
+    endpoint: string
+    object: Record<string, any>
+    callback?: () => void
+}): void {
     api.update(`api/${props.endpoint}/${props.object.id}`, {
         ...props.object,
         deleted: !undo,
@@ -263,7 +281,7 @@ export function deleteWithUndo({ undo = false, ...props }: Record<string, any>):
         props.callback?.()
         const response = (
             <span>
-                <b>{props.object.name ?? 'Untitled'}</b>
+                <b>{props.object.name || <i>Unnnamed</i>}</b>
                 {!undo ? ' deleted. Click to undo.' : ' deletion undone.'}
             </span>
         )
@@ -507,7 +525,7 @@ export function humanFriendlyDuration(d: string | number | null | undefined, max
 
     const dayDisplay = days > 0 ? days + 'd' : ''
     const hDisplay = h > 0 ? h + 'h' : ''
-    const mDisplay = m > 0 ? m + 'min' : ''
+    const mDisplay = m > 0 ? m + 'm' : ''
     const sDisplay = s > 0 ? s + 's' : hDisplay || mDisplay ? '' : '0s'
 
     let units: string[] = []
@@ -524,12 +542,15 @@ export function humanFriendlyDiff(from: dayjs.Dayjs | string, to: dayjs.Dayjs | 
     return humanFriendlyDuration(diff)
 }
 
-export function humanFriendlyDetailedTime(date: dayjs.Dayjs | string | null, withSeconds: boolean = false): string {
+export function humanFriendlyDetailedTime(
+    date: dayjs.Dayjs | string | null,
+    withSeconds: boolean = false,
+    formatString: string = 'MMMM DD, YYYY h:mm'
+): string {
     if (!date) {
         return 'Never'
     }
     const parsedDate = dayjs(date)
-    let formatString = 'MMMM Do YYYY h:mm'
     const today = dayjs().startOf('day')
     const yesterday = today.clone().subtract(1, 'days').startOf('day')
     if (parsedDate.isSame(dayjs(), 'm')) {
@@ -604,10 +625,9 @@ export function isURL(input: any): boolean {
     if (!input || typeof input !== 'string') {
         return false
     }
-    // https://stackoverflow.com/questions/3809401/what-is-a-good-regular-expression-to-match-a-url
-    const regexp =
-        /^\s*https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)/gi
-    return !!input.match?.(regexp)
+    // Regex by elmervc
+    const regexp = new RegExp('^([a-zA-Z]+)://(-.)?(([^s/?.#-]+|([^s/?.#-]-[^s/?.#-])).?)+(/[^s]*)?', 'iu')
+    return !!input.trim().match(regexp)
 }
 
 export function isEmail(string: string): boolean {
@@ -702,62 +722,115 @@ export function determineDifferenceType(
     }
 }
 
+const DATE_FORMAT = 'D MMM YYYY'
+
 export const dateMapping: Record<string, dateMappingOption> = {
     Custom: { values: [] },
-    Today: { values: ['dStart'] },
-    Yesterday: { values: ['-1d', 'dStart'] },
-    'Last 24 hours': { values: ['-24h'] },
-    'Last 48 hours': { values: ['-48h'], inactive: true },
-    'Last 7 days': { values: ['-7d'] },
-    'Last 14 days': { values: ['-14d'] },
-    'Last 30 days': { values: ['-30d'] },
-    'Last 90 days': { values: ['-90d'] },
-    'This month': { values: ['mStart'], inactive: true },
-    'Previous month': { values: ['-1mStart', '-1mEnd'], inactive: true },
-    'Year to date': { values: ['yStart'] },
+    Today: {
+        values: ['dStart'],
+        getFormattedDate: (date: dayjs.Dayjs, format: string): string => date.startOf('d').format(format),
+    },
+    Yesterday: {
+        values: ['-1d', 'dStart'],
+        getFormattedDate: (date: dayjs.Dayjs, format: string): string => date.subtract(1, 'd').format(format),
+    },
+    'Last 24 hours': {
+        values: ['-24h'],
+        getFormattedDate: (date: dayjs.Dayjs, format: string): string =>
+            `${date.subtract(24, 'h').format(format)} - ${date.endOf('d').format(format)}`,
+    },
+    'Last 48 hours': {
+        values: ['-48h'],
+        getFormattedDate: (date: dayjs.Dayjs, format: string): string =>
+            `${date.subtract(48, 'h').format(format)} - ${date.endOf('d').format(format)}`,
+        inactive: true,
+    },
+    'Last 7 days': {
+        values: ['-7d'],
+        getFormattedDate: (date: dayjs.Dayjs, format: string): string =>
+            `${date.subtract(7, 'd').format(format)} - ${date.endOf('d').format(format)}`,
+    },
+    'Last 14 days': {
+        values: ['-14d'],
+        getFormattedDate: (date: dayjs.Dayjs, format: string): string =>
+            `${date.subtract(14, 'd').format(format)} - ${date.endOf('d').format(format)}`,
+    },
+    'Last 30 days': {
+        values: ['-30d'],
+        getFormattedDate: (date: dayjs.Dayjs, format: string): string =>
+            `${date.subtract(30, 'd').format(format)} - ${date.endOf('d').format(format)}`,
+    },
+    'Last 90 days': {
+        values: ['-90d'],
+        getFormattedDate: (date: dayjs.Dayjs, format: string): string =>
+            `${date.subtract(90, 'd').format(format)} - ${date.endOf('d').format(format)}`,
+    },
+    'This month': {
+        values: ['mStart'],
+        getFormattedDate: (date: dayjs.Dayjs, format: string): string =>
+            `${date.subtract(1, 'm').format(format)} - ${date.endOf('d').format(format)}`,
+        inactive: true,
+    },
+    'Previous month': {
+        values: ['-1mStart', '-1mEnd'],
+        getFormattedDate: (date: dayjs.Dayjs, format: string): string =>
+            `${date.subtract(1, 'm').startOf('M').format(format)} - ${date.subtract(1, 'm').endOf('M').format(format)}`,
+        inactive: true,
+    },
+    'Year to date': {
+        values: ['yStart'],
+        getFormattedDate: (date: dayjs.Dayjs, format: string): string =>
+            `${date.startOf('y').format(format)} - ${date.endOf('d').format(format)}`,
+    },
     'All time': { values: ['all'] },
 }
 
 export const isDate = /([0-9]{4}-[0-9]{2}-[0-9]{2})/
 
+export function getFormattedLastWeekDate(lastDay: dayjs.Dayjs = dayjs()): string {
+    return `${lastDay.subtract(7, 'week').format(DATE_FORMAT)} - ${lastDay.endOf('d').format(DATE_FORMAT)}`
+}
+
 export function dateFilterToText(
     dateFrom: string | dayjs.Dayjs | null | undefined,
     dateTo: string | dayjs.Dayjs | null | undefined,
     defaultValue: string,
-    dateOptions: Record<string, dateMappingOption> = dateMapping
+    dateOptions: Record<string, dateMappingOption> = dateMapping,
+    isDateFormatted: boolean = false,
+    dateFormat: string = DATE_FORMAT
 ): string {
     if (dayjs.isDayjs(dateFrom) && dayjs.isDayjs(dateTo)) {
-        return `${dateFrom.format('YYYY-MM-DD')} - ${dateTo.format('YYYY-MM-DD')}`
+        return `${dateFrom.format(dateFormat)} - ${dateTo.format(dateFormat)}`
     }
     dateFrom = (dateFrom || undefined) as string | undefined
     dateTo = (dateTo || undefined) as string | undefined
 
     if (isDate.test(dateFrom || '') && isDate.test(dateTo || '')) {
-        return `${dateFrom} - ${dateTo}`
+        return isDateFormatted
+            ? `${dayjs(dateFrom, 'YYYY-MM-DD').format(dateFormat)} - ${dayjs(dateTo, 'YYYY-MM-DD').format(dateFormat)}`
+            : `${dateFrom} - ${dateTo}`
     }
 
-    if (dateFrom === 'dStart') {
-        // Changed to "last 24 hours" but this is backwards compatibility
-        return 'Today'
-    }
-
+    // From date to today
     if (isDate.test(dateFrom || '') && !isDate.test(dateTo || '')) {
         const days = dayjs().diff(dayjs(dateFrom), 'days')
+        const formattedDateFrom = dayjs(dateFrom).format(dateFormat)
+        const formattedToday = dayjs().format(dateFormat)
         if (days > 366) {
-            return `${dateFrom} - Today`
+            return isDateFormatted ? `${dateFrom} - Today` : `${formattedDateFrom} - ${formattedToday}}`
         } else if (days > 0) {
-            return `Last ${days} days`
+            return isDateFormatted ? `${formattedDateFrom} - ${formattedToday}` : `Last ${days} days`
         } else if (days === 0) {
-            return `Today`
+            return isDateFormatted ? formattedToday : `Today`
         } else {
-            return `Starting from ${dateFrom}`
+            return isDateFormatted ? `${formattedDateFrom} - ` : `Starting from ${dateFrom}`
         }
     }
 
     let name = defaultValue
-    Object.entries(dateOptions).map(([key, { values }]) => {
+    Object.entries(dateOptions).map(([key, { values, getFormattedDate }]) => {
         if (values[0] === dateFrom && values[1] === dateTo && key !== 'Custom') {
-            name = key
+            name = isDateFormatted && getFormattedDate ? getFormattedDate(dayjs(), dateFormat) : key
         }
     })[0]
     return name
@@ -980,12 +1053,18 @@ export function autocorrectInterval(filters: Partial<FilterType>): IntervalType 
     }
 }
 
-export function pluralize(count: number, singular: string, plural?: string, includeNumber: boolean = true): string {
+export function pluralize(
+    count: number,
+    singular: string,
+    plural?: string,
+    includeNumber: boolean = true,
+    formatNumber: boolean = false
+): string {
     if (!plural) {
         plural = singular + 's'
     }
     const form = count === 1 ? singular : plural
-    return includeNumber ? `${count} ${form}` : form
+    return includeNumber ? `${formatNumber ? count.toLocaleString() : count} ${form}` : form
 }
 
 /** Return a number in a compact format, with a SI suffix if applicable.
@@ -1026,13 +1105,14 @@ export function endWithPunctation(text?: string | null): string {
     return trimmedText
 }
 
-export function shortTimeZone(timeZone?: string, atDate: Date = new Date()): string {
+export function shortTimeZone(timeZone?: string, atDate?: Date): string {
     /**
      * Return the short timezone identifier for a specific timezone (e.g. BST, EST, PDT, UTC+2).
      * @param timeZone E.g. 'America/New_York'
      * @param atDate
      */
-    const localeTimeString = new Date(atDate).toLocaleTimeString('en-us', { timeZoneName: 'short', timeZone })
+    const date = atDate ? new Date(atDate) : new Date()
+    const localeTimeString = date.toLocaleTimeString('en-us', { timeZoneName: 'short', timeZone })
     return localeTimeString.split(' ')[2]
 }
 
@@ -1191,4 +1271,8 @@ export function findLastIndex<T>(array: Array<T>, predicate: (value: T, index: n
 
 export function isEllipsisActive(e: HTMLElement | null): boolean {
     return !!e && e.offsetWidth < e.scrollWidth
+}
+
+export function isGroupType(actor: ActorType): actor is GroupActorType {
+    return actor.type === 'group'
 }

@@ -15,7 +15,7 @@ import { PathItemFilters } from 'lib/components/PropertyFilters/PathItemFilters'
 import { CloseButton } from 'lib/components/CloseButton'
 import { TaxonomicFilterGroupType } from 'lib/components/TaxonomicFilter/types'
 import { Tooltip } from 'lib/components/Tooltip'
-import { PersonModal } from 'scenes/trends/PersonModal'
+import { PersonsModal } from 'scenes/trends/PersonsModal'
 import { personsModalLogic } from 'scenes/trends/personsModalLogic'
 import { combineUrl, encodeParams, router } from 'kea-router'
 import { featureFlagLogic } from 'lib/logic/featureFlagLogic'
@@ -165,13 +165,14 @@ export function PathTab(): JSX.Element {
 
     return (
         <>
-            <PersonModal
+            <PersonsModal
                 visible={showingPeople && !cohortModalVisible}
                 view={InsightType.PATHS}
                 filters={filter}
                 onSaveCohort={() => {
                     setCohortModalVisible(true)
                 }}
+                aggregationTargetLabel={{ singular: 'user', plural: 'users' }}
             />
             <Row>
                 <Col span={12}>

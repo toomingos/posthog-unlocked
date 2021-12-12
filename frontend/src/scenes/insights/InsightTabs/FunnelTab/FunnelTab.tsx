@@ -26,8 +26,14 @@ import { insightLogic } from 'scenes/insights/insightLogic'
 import { AggregationSelect } from 'scenes/insights/AggregationSelect'
 import { groupsModel } from '~/models/groupsModel'
 import { TaxonomicFilterGroupType } from 'lib/components/TaxonomicFilter/types'
+import { FunnelTabWithSimpleMode } from './FunnelTabWithSimpleMode'
 
 export function FunnelTab(): JSX.Element {
+    const { featureFlags } = useValues(featureFlagLogic)
+    return featureFlags[FEATURE_FLAGS.FUNNEL_SIMPLE_MODE] ? <FunnelTabWithSimpleMode /> : <FunnelTabOld />
+}
+
+function FunnelTabOld(): JSX.Element {
     const { insightProps } = useValues(insightLogic)
     const { loadResults } = useActions(insightLogic)
     const { isStepsEmpty, filters, clickhouseFeaturesEnabled, aggregationTargetLabel, filterSteps } = useValues(
@@ -53,7 +59,9 @@ export function FunnelTab(): JSX.Element {
             <Row gutter={16} data-attr="funnel-tab" className="funnel-tab">
                 <Col xs={24} md={16} xl={isHorizontalUIEnabled ? undefined : 24}>
                     <div style={{ paddingRight: isSmallScreen ? undefined : 16 }}>
-                        <ToggleButtonChartFilter />
+                        <div className="mb">
+                            <ToggleButtonChartFilter />
+                        </div>
                         <form
                             onSubmit={(e): void => {
                                 e.preventDefault()
@@ -152,8 +160,10 @@ export function FunnelTab(): JSX.Element {
                                         <Tooltip
                                             title={
                                                 <>
-                                                    Exclude {aggregationTargetLabel.plural} who completed the specified
-                                                    event between two specific steps. Note that these
+                                                    Exclude {aggregationTargetLabel.plural}{' '}
+                                                    {filters.aggregation_group_type_index != undefined ? 'that' : 'who'}{' '}
+                                                    completed the specified event between two specific steps. Note that
+                                                    these
                                                     {aggregationTargetLabel.plural} will be{' '}
                                                     <b>completely excluded from the entire funnel</b>.
                                                 </>
@@ -209,7 +219,13 @@ export function FunnelTab(): JSX.Element {
                                 </Tooltip>
                             </h4>
                             <Row align="middle">
-                                <BreakdownFilter filters={filters} setFilters={setFilters} />
+                                <BreakdownFilter
+                                    filters={filters}
+                                    setFilters={setFilters}
+                                    useMultiBreakdown={
+                                        featureFlags[FEATURE_FLAGS.BREAKDOWN_BY_MULTIPLE_PROPERTIES] !== undefined
+                                    }
+                                />
                             </Row>
                         </>
                     )}

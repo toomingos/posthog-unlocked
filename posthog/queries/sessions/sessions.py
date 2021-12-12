@@ -1,12 +1,10 @@
 import datetime
 from typing import Any, Dict, List, Tuple
 
-from dateutil.relativedelta import relativedelta
 from django.db import connection
 from django.db.models import F, Q, QuerySet
 from django.db.models.expressions import Window
 from django.db.models.functions import Lag
-from django.utils.timezone import now
 
 from posthog.constants import SESSION_AVG
 from posthog.models import Event, Filter, Team
@@ -48,7 +46,7 @@ class Sessions(BaseQuery):
             )
 
         if not len(events):
-            events = self.events_query(filter, team)
+            events = self.events_query(filter, team)  # type: ignore
 
         # get compared period
         if filter.compare and filter._date_from != "all" and filter.session == SESSION_AVG:

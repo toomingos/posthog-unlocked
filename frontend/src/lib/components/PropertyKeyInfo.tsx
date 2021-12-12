@@ -224,19 +224,70 @@ export const keyMapping: KeyMappingInterface = {
         },
         $identify: {
             label: 'Identify',
-            description: 'Tie a user to their actions',
+            description: 'A user has been identified with properties',
+        },
+        $groupidentify: {
+            label: 'Group Identify',
+            description: 'A group has been identified with properties',
+        },
+        $groups: {
+            label: 'Groups',
+            description: 'Relevant groups',
+        },
+        // There are at most 5 group types per project, so indexes 0, 1, 2, 3, and 4
+        $group_0: {
+            label: 'Group 1',
+            hide: true,
+        },
+        $group_1: {
+            label: 'Group 2',
+            hide: true,
+        },
+        $group_2: {
+            label: 'Group 3',
+            hide: true,
+        },
+        $group_3: {
+            label: 'Group 4',
+            hide: true,
+        },
+        $group_4: {
+            label: 'Group 5',
+            hide: true,
+        },
+        $group_set: {
+            label: 'Group Set',
+            description: 'Group properties to be set',
+        },
+        $group_key: {
+            label: 'Group Key',
+            description: 'Specified group key',
+        },
+        $group_type: {
+            label: 'Group Type',
+            description: 'Specified group type',
+        },
+        $window_id: {
+            label: 'Window ID',
+            description: 'Unique window ID for session recording disambiguation',
+            hide: true,
+        },
+        $session_id: {
+            label: 'Session ID',
+            description: 'Unique session ID for session recording disambiguation',
+            hide: true,
         },
         $rageclick: {
             label: 'Rageclick',
-            description: 'When a user repeatedly clicks a targeted area or element over a short period of time',
+            description: 'A user has rapidly and repeatedly clicked in a single place',
         },
         $set: {
             label: 'Set',
-            description: '',
+            description: 'Person properties to be set',
         },
         $set_once: {
             label: 'Set Once',
-            description: '',
+            description: 'Person properties to be set if not set already (i.e. first-touch)',
         },
         $capture_failed_request: {
             label: 'Capture Failed Request',
@@ -453,9 +504,9 @@ export const keyMapping: KeyMappingInterface = {
             label: 'Tag Name',
             description: (
                 <span>
-                    Tag name of the element you want to filter on.
+                    HTML tag name of the element which you want to filter.
                     <br />
-                    <i>Note: filtering on element properties only works with $autocapture</i>
+                    <span className="text-muted mt-05">Note: Only works with the "Autocapture" event.</span>
                 </span>
             ),
             examples: ['a', 'button', 'input'],
@@ -464,30 +515,30 @@ export const keyMapping: KeyMappingInterface = {
             label: 'CSS Selector',
             description: (
                 <span>
-                    Select any element by css selector
+                    Select any element by CSS selector.
                     <br />
-                    <i>Note: filtering on element properties only works with $autocapture</i>
+                    <span className="text-muted mt-05">Note: Only works with the "Autocapture" event.</span>
                 </span>
             ),
-            examples: ['div > a', 'table td:nth-child(2)'],
+            examples: ['div > a', 'table td:nth-child(2)', '.my-class'],
         },
         text: {
             label: 'Text',
             description: (
                 <span>
-                    The inner text of the element.
+                    Filter on the inner text of the HTML element.
                     <br />
-                    <i>Note: filtering on element properties only works with $autocapture</i>
+                    <span className="text-muted mt-05">Note: Only works with the "Autocapture" event.</span>
                 </span>
             ),
         },
         href: {
-            label: 'href',
+            label: 'Target (href)',
             description: (
                 <span>
-                    The href attribute of the element.
+                    Filter on the <code>href</code> attribute of the element.
                     <br />
-                    <i>Note: filtering on element properties only works with $autocapture</i>
+                    <span className="text-muted mt-05">Note: Only works with the "Autocapture" event.</span>
                 </span>
             ),
             examples: ['https://posthog.com/about'],
@@ -531,20 +582,14 @@ export function PropertyKeyTitle({ data }: { data: KeyMapping }): JSX.Element {
 export function PropertyKeyDescription({ data, value }: { data: KeyMapping; value: string }): JSX.Element {
     return (
         <span>
+            {data.description ? <p>{data.description}</p> : null}
             {data.examples ? (
-                <>
-                    <span>{data.description}</span>
-                    <br />
-                    <br />
-                    <span>
-                        <i>Example: </i>
-                        {data.examples.join(', ')}
-                    </span>
-                </>
-            ) : (
-                data.description
-            )}
-            <hr />
+                <p>
+                    <i>Example: </i>
+                    {data.examples.join(', ')}
+                </p>
+            ) : null}
+            {data.description || data.examples ? <hr /> : null}
             Sent as <code style={{ padding: '2px 3px' }}>{value}</code>
         </span>
     )

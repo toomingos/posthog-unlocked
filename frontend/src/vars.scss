@@ -1,10 +1,12 @@
-/* This file contains the main styling configuration for PostHog. We also use AntD which uses LESS,
-when changing any base config here, please remember to update antd.less too  */
+/*
+This file contains the main styling configuration for PostHog. We also use AntD which uses LESS,
+when changing any base config here, please remember to update antd.less too
+*/
 
 // Main colors
 $primary: #5375ff;
 $primary_alt: #35416b;
-$primary_hover: #eef2ff;
+$primary_hover: #839af8;
 $primary_active: #3d57d9;
 $primary_bg_hover: rgba($primary, 0.1);
 $primary_bg_active: rgba($primary, 0.2);
@@ -101,6 +103,10 @@ $space: linear-gradient(180deg, #0a092a 0%, #271955 100%);
 
 // Fonts
 $medium: 500;
+
+// From chris' figma designs
+$dark-grey: #d9d9d9;
+$light-grey: #f2f2f2;
 
 // Additional style configurations
 %mixin-base-bordered-card {

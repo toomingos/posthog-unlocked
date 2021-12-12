@@ -1,7 +1,7 @@
 import { useActions, useValues } from 'kea'
 import React from 'react'
 import { LoadingOutlined, PlusCircleOutlined, WarningOutlined } from '@ant-design/icons'
-import { IllustrationDanger, IconTrendUp, IconExternalLinkBold } from 'lib/components/icons'
+import { IllustrationDanger, IconTrendUp, IconOpenInNew } from 'lib/components/icons'
 import { preflightLogic } from 'scenes/PreflightCheck/logic'
 import { funnelLogic } from 'scenes/funnels/funnelLogic'
 import { entityFilterLogic } from 'scenes/insights/ActionFilter/entityFilterLogic'
@@ -97,56 +97,63 @@ export function InsightTimeoutState({ isLoading }: { isLoading: boolean }): JSX.
     )
 }
 
-export function InsightErrorState(): JSX.Element {
+export interface InsightErrorStateProps {
+    excludeDetail?: boolean
+    title?: string
+}
+
+export function InsightErrorState({ excludeDetail, title }: InsightErrorStateProps): JSX.Element {
     return (
-        <div className="insight-empty-state error">
+        <div className={clsx(['insight-empty-state', 'error', { 'match-container': excludeDetail }])}>
             <div className="empty-state-inner">
                 <div className="illustration-main">
                     <IllustrationDanger />
                 </div>
-                <h2>There was an error completing this query</h2>
-                <div className="mt">
-                    We apologize for this unexpected situation. There are a few things you can do:
-                    <ol>
-                        <li>
-                            First and foremost you can <b>try again</b>. We recommended you wait a few moments before
-                            doing so.
-                        </li>
-                        <li>
-                            <a
-                                data-attr="insight-error-raise-issue"
-                                href="https://github.com/PostHog/posthog/issues/new?labels=bug&template=bug_report.md"
-                                target="_blank"
-                                rel="noreferrer noopener"
-                            >
-                                Raise an issue
-                            </a>{' '}
-                            in our GitHub repository.
-                        </li>
-                        <li>
-                            Get in touch with us{' '}
-                            <a
-                                data-attr="insight-error-slack"
-                                href="https://posthog.com/slack"
-                                rel="noopener noreferrer"
-                                target="_blank"
-                            >
-                                on Slack
-                            </a>
-                            .
-                        </li>
-                        <li>
-                            Email us at{' '}
-                            <a
-                                data-attr="insight-error-email"
-                                href="mailto:hey@posthog.com?subject=Insight%20graph%20error"
-                            >
-                                hey@posthog.com
-                            </a>
-                            .
-                        </li>
-                    </ol>
-                </div>
+                <h2>{title || 'There was an error completing this query'}</h2>
+                {!excludeDetail && (
+                    <div className="mt">
+                        We apologize for this unexpected situation. There are a few things you can do:
+                        <ol>
+                            <li>
+                                First and foremost you can <b>try again</b>. We recommended you wait a few moments
+                                before doing so.
+                            </li>
+                            <li>
+                                <a
+                                    data-attr="insight-error-raise-issue"
+                                    href="https://github.com/PostHog/posthog/issues/new?labels=bug&template=bug_report.md"
+                                    target="_blank"
+                                    rel="noreferrer noopener"
+                                >
+                                    Raise an issue
+                                </a>{' '}
+                                in our GitHub repository.
+                            </li>
+                            <li>
+                                Get in touch with us{' '}
+                                <a
+                                    data-attr="insight-error-slack"
+                                    href="https://posthog.com/slack"
+                                    rel="noopener noreferrer"
+                                    target="_blank"
+                                >
+                                    on Slack
+                                </a>
+                                .
+                            </li>
+                            <li>
+                                Email us at{' '}
+                                <a
+                                    data-attr="insight-error-email"
+                                    href="mailto:hey@posthog.com?subject=Insight%20graph%20error"
+                                >
+                                    hey@posthog.com
+                                </a>
+                                .
+                            </li>
+                        </ol>
+                    </div>
+                )}
             </div>
         </div>
     )
@@ -192,7 +199,7 @@ export function FunnelSingleStepState(): JSX.Element {
                         style={{ justifyContent: 'center' }}
                     >
                         Learn more about funnels in our support documentation
-                        <IconExternalLinkBold style={{ marginLeft: 4, fontSize: '0.85em' }} />
+                        <IconOpenInNew style={{ marginLeft: 4, fontSize: '0.85em' }} />
                     </a>
                 </div>
             </div>
@@ -220,7 +227,7 @@ export function FunnelInvalidExclusionState(): JSX.Element {
                         rel="noopener"
                     >
                         Learn more about funnels in our support documentation
-                        <IconExternalLinkBold style={{ marginLeft: 4, fontSize: '0.85em' }} />
+                        <IconOpenInNew style={{ marginLeft: 4, fontSize: '0.85em' }} />
                     </a>
                 </div>
             </div>

@@ -9,7 +9,7 @@ import { DangerZone } from './DangerZone'
 import { RestrictedArea, RestrictedComponentProps } from '../../../lib/components/RestrictedArea'
 import { OrganizationMembershipLevel } from '../../../lib/constants'
 import { preflightLogic } from 'scenes/PreflightCheck/logic'
-import { IconExternalLink } from 'lib/components/icons'
+import { IconOpenInNew } from 'lib/components/icons'
 import { userLogic } from 'scenes/userLogic'
 import { SceneExport } from 'scenes/sceneTypes'
 
@@ -101,7 +101,7 @@ function DomainWhitelist({ isRestricted }: RestrictedComponentProps): JSX.Elemen
                         target="_blank"
                         rel="noopener"
                     >
-                        Learn more <IconExternalLink />
+                        Learn more <IconOpenInNew />
                     </a>
                 </div>
             )}
@@ -120,7 +120,6 @@ function EmailPreferences({ isRestricted }: RestrictedComponentProps): JSX.Eleme
             </h2>
             <div>
                 <Switch
-                    // @ts-expect-error - id works just fine despite not being in CompoundedComponent
                     id="is-member-join-email-enabled-switch"
                     data-attr="is-member-join-email-enabled-switch"
                     onChange={(checked) => {

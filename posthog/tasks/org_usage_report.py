@@ -9,7 +9,7 @@ from django.db.models.manager import BaseManager
 from sentry_sdk import capture_exception
 
 from posthog.event_usage import report_org_usage, report_org_usage_failure
-from posthog.models import Event, OrganizationMembership, Team, User
+from posthog.models import Event, GroupTypeMapping, OrganizationMembership, Team, User
 from posthog.tasks.status_report import get_instance_licenses
 from posthog.utils import get_instance_realm, get_previous_day, is_clickhouse_enabled
 from posthog.version import VERSION
@@ -40,6 +40,8 @@ OrgUsageData = TypedDict(
         "event_count_lifetime": Optional[int],
         "event_count_in_period": Optional[int],
         "event_count_in_month": Optional[int],
+        "group_types_total": Optional[int],
+        "event_count_with_groups_month": Optional[int],
     },
 )
 
@@ -56,6 +58,8 @@ OrgReport = TypedDict(
         "event_count_lifetime": int,
         "event_count_in_period": int,
         "event_count_in_month": int,
+        "group_types_total": Optional[int],
+        "event_count_with_groups_month": Optional[int],
         "organization_id": str,
         "organization_name": str,
         "organization_created_at": str,
@@ -99,19 +103,19 @@ def send_all_reports(
 
     for team in Team.objects.exclude(organization__for_internal_metrics=True):
         org = team.organization
-        id = str(org.id)
-        if id in org_data:
-            org_data[id]["teams"].append(team.id)
+        organization_id = str(org.id)
+        if organization_id in org_data:
+            org_data[organization_id]["teams"].append(team.id)
         else:
-            org_data[id] = {
+            org_data[organization_id] = {
                 "teams": [team.id],
-                "user_count": get_org_user_count(id),
+                "user_count": get_org_user_count(organization_id),
                 "name": org.name,
                 "created_at": str(org.created_at),
             }
 
-    for id, org in org_data.items():
-        org_owner = get_org_owner_or_first_user(id)
+    for organization_id, org in org_data.items():
+        org_owner = get_org_owner_or_first_user(organization_id)
         if not org_owner:
             continue
         distinct_id = org_owner.distinct_id
@@ -127,7 +131,7 @@ def send_all_reports(
             report: dict = {
                 **metadata,
                 **usage,
-                "organization_id": id,
+                "organization_id": organization_id,
                 "organization_name": org["name"],
                 "organization_created_at": org["created_at"],
                 "organization_user_count": org["user_count"],
@@ -135,9 +139,11 @@ def send_all_reports(
             }
             org_reports.append(report)  # type: ignore
         except Exception as err:
-            report_org_usage_failure(distinct_id, str(err))
-        if not (dry_run or settings.TEST or settings.DEBUG):
-            report_org_usage(distinct_id, report)
+            logger.warning("Organization usage report calculation failed", err)
+            if not dry_run:
+                report_org_usage_failure(organization_id, distinct_id, str(err))
+        if not dry_run:
+            report_org_usage(organization_id, distinct_id, report)
             time.sleep(0.25)
 
     return org_reports
@@ -154,14 +160,23 @@ def get_org_usage(
         "event_count_lifetime": None,
         "event_count_in_period": None,
         "event_count_in_month": None,
+        "event_count_with_groups_month": 0,
+        "group_types_total": GroupTypeMapping.objects.filter(team_id__in=team_ids).count(),
     }
     usage = default_usage
     if data_source == "clickhouse":
-        from ee.clickhouse.models.event import get_agg_event_count_for_teams, get_agg_event_count_for_teams_and_period
+        from ee.clickhouse.models.event import (
+            get_agg_event_count_for_teams,
+            get_agg_event_count_for_teams_and_period,
+            get_agg_events_with_groups_count_for_teams_and_period,
+        )
 
         usage["event_count_lifetime"] = get_agg_event_count_for_teams(team_ids)
         usage["event_count_in_period"] = get_agg_event_count_for_teams_and_period(team_ids, period_start, period_end)
         usage["event_count_in_month"] = get_agg_event_count_for_teams_and_period(team_ids, month_start, period_end)
+        usage["event_count_with_groups_month"] = get_agg_events_with_groups_count_for_teams_and_period(
+            team_ids, month_start, period_end
+        )
     else:
         usage["event_count_lifetime"] = Event.objects.filter(team_id__in=team_ids).count()
         usage["event_count_in_period"] = Event.objects.filter(
