@@ -171,6 +171,15 @@ class TeamViewSet(AnalyticsDestroyModelMixin, viewsets.ModelViewSet):
             if team is None:
                 raise exceptions.NotFound()
             return team
+        queryset = self.filter_queryset(self.get_queryset())
+        filter_kwargs = {self.lookup_field: lookup_value}
+        try:
+            team = get_object_or_404(queryset, **filter_kwargs)
+        except ValueError as error:
+            raise exceptions.ValidationError(str(error))
+        self.check_object_permissions(self.request, team)
+        return team
+
     @action(methods=["PATCH"], detail=True)
     def reset_token(self, request: request.Request, id: str, **kwargs) -> response.Response:
         team = self.get_object()
