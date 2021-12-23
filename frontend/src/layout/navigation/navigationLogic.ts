@@ -37,8 +37,6 @@ export const navigationLogic = kea<navigationLogicType<WarningType>>({
         hideCreateOrganizationModal: true,
         showCreateProjectModal: true,
         hideCreateProjectModal: true,
-        showToolbarModal: true,
-        hideToolbarModal: true,
         toggleProjectSwitcher: true,
         hideProjectSwitcher: true,
         setHotkeyNavigationEngaged: (hotkeyNavigationEngaged: boolean) => ({ hotkeyNavigationEngaged }),
@@ -89,13 +87,6 @@ export const navigationLogic = kea<navigationLogicType<WarningType>>({
                 hideCreateProjectModal: () => false,
             },
         ],
-        isToolbarModalShown: [
-            false,
-            {
-                showToolbarModal: () => true,
-                hideToolbarModal: () => false,
-            },
-        ],
         isProjectSwitcherShown: [
             false,
             {
@@ -144,7 +135,7 @@ export const navigationLogic = kea<navigationLogicType<WarningType>>({
                 }
 
                 // if you have status metrics these three must have `value: true`
-                const aliveMetrics = ['redis_alive', 'db_alive', 'plugin_sever_alive', 'async_migrations_ok']
+                const aliveMetrics = ['redis_alive', 'db_alive', 'plugin_sever_alive']
                 const aliveSignals = statusMetrics
                     .filter((sm) => sm.key && aliveMetrics.includes(sm.key))
                     .filter((sm) => sm.value).length

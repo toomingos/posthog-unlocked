@@ -924,3 +924,25 @@ export function IconLegend({ style }: { style?: CSSProperties }): JSX.Element {
         </svg>
     )
 }
+
+export function IconExperiment({ style }: { style?: CSSProperties }): JSX.Element {
+    return (
+        <svg width="18" height="16" viewBox="0 0 18 16" fill="none" style={style} xmlns="http://www.w3.org/2000/svg">
+            <path
+                d="M9.99999 7.33L15 14H2.99999L7.99999 7.33V2H9.99999V7.33ZM12.96 0H5.03999C4.61999 0 4.38999 0.48 4.64999 0.81L5.99999 2.5V6.67L0.199992 14.4C-0.290008 15.06 0.179992 16 0.999992 16H17C17.82 16 18.29 15.06 17.8 14.4L12 6.67V2.5L13.35 0.81C13.61 0.48 13.38 0 12.96 0Z"
+                fill="currentColor"
+            />
+        </svg>
+    )
+}
+
+export function IconHeatmap(props: React.SVGProps<SVGSVGElement>): JSX.Element {
+    return (
+        <svg width="1em" height="1em" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
+            <path
+                d="M17.5 1.49056C17.5 0.00305736 15.5844 -0.557568 14.7406 0.675557C7 11.9899 18 12.4993 18 17.9993C18 20.2262 16.1806 22.0281 13.9469 21.9987C11.7487 21.9706 10 20.1381 10 17.9399V12.5956C10 11.2393 8.34562 10.5812 7.41062 11.5643C5.7375 13.3218 4 16.3324 4 19.9993C4 26.6162 9.38312 31.9993 16 31.9993C22.6169 31.9993 28 26.6162 28 19.9993C28 9.35618 17.5 7.93681 17.5 1.49056V1.49056Z"
+                fill="currentColor"
+            />
+        </svg>
+    )
+}
