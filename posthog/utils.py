@@ -61,7 +61,7 @@ __location__ = os.path.realpath(os.path.join(os.getcwd(), os.path.dirname(__file
 
 def format_label_date(date: datetime.datetime, interval: str) -> str:
     labels_format = "%-d-%b-%Y"
-    if interval == "hour" or interval == "minute":
+    if interval == "hour":
         labels_format += " %H:%M"
     return date.strftime(labels_format)
 
@@ -245,6 +245,7 @@ def render_template(template_name: str, request: HttpRequest, context: Dict = {}
 
     posthog_app_context: Dict[str, Any] = {
         "persisted_feature_flags": settings.PERSISTED_FEATURE_FLAGS,
+        "anonymous": not request.user or not request.user.is_authenticated,
     }
 
     # Set the frontend app context
@@ -323,7 +324,7 @@ def append_data(dates_filled: List, interval=None, math="sum") -> Dict[str, Any]
 
     days_format = "%Y-%m-%d"
 
-    if interval == "hour" or interval == "minute":
+    if interval == "hour":
         days_format += " %H:%M:%S"
 
     for item in dates_filled:

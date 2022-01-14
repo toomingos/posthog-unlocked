@@ -1,6 +1,6 @@
 import posthog from 'posthog-js'
 import { parsePeopleParams, PeopleParamType } from '../scenes/trends/personsModalLogic'
-import { ActionType, ActorType, CohortType, FilterType, PluginLogEntry, TeamType } from '../types'
+import { ActionType, ActorType, CohortType, EventType, FilterType, PluginLogEntry, TeamType } from '../types'
 import { getCurrentTeamId } from './utils/logics'
 import { CheckboxValueType } from 'antd/lib/checkbox/Group'
 import { LOGS_PORTION_LIMIT } from 'scenes/plugins/plugin/pluginLogsLogic'
@@ -100,6 +100,10 @@ class ApiRequest {
         return this.actions(teamId).addPathComponent(actionId.toString())
     }
 
+    public events(teamId: TeamType['id'] = getCurrentTeamId()): ApiRequest {
+        return this.projectsDetail(teamId).addPathComponent('events')
+    }
+
     public cohorts(teamId: TeamType['id'] = getCurrentTeamId()): ApiRequest {
         return this.projectsDetail(teamId).addPathComponent('cohorts')
     }
@@ -127,7 +131,7 @@ class ApiRequest {
     }
 }
 
-const normalise_url = (url: string): string => {
+const normalizeUrl = (url: string): string => {
     if (url.indexOf('http') !== 0) {
         if (!url.startsWith('/')) {
             url = '/' + url
@@ -136,6 +140,18 @@ const normalise_url = (url: string): string => {
         url = url + (url.indexOf('?') === -1 && url[url.length - 1] !== '/' ? '/' : '')
     }
     return url
+}
+
+const PROJECT_ID_REGEX = /\/api\/projects\/(\w+)(?:$|[/?#])/
+
+const ensureProjectIdNotInvalid = (url: string): void => {
+    const projectIdMatch = PROJECT_ID_REGEX.exec(url)
+    if (projectIdMatch) {
+        const projectId = projectIdMatch[1].trim()
+        if (projectId === 'null' || projectId === 'undefined') {
+            throw { status: 0, detail: 'Cannot make request - project ID is unknown.' }
+        }
+    }
 }
 
 const api = {
@@ -188,6 +204,17 @@ const api = {
                 .withAction('people.csv')
                 .withQueryString(parsePeopleParams(peopleParams, filters))
                 .assembleFullUrl(true)
+        },
+    },
+
+    events: {
+        async list(
+            filters: Partial<FilterType>,
+            limit: number = 10,
+            teamId: TeamType['id'] = getCurrentTeamId()
+        ): Promise<PaginatedResponse<EventType[]>> {
+            const params: Record<string, any> = { ...filters, limit }
+            return new ApiRequest().events(teamId).withQueryString(toParams(params)).get()
         },
     },
 
@@ -248,7 +275,8 @@ const api = {
     },
 
     async get(url: string, signal?: AbortSignal): Promise<any> {
-        url = normalise_url(url)
+        url = normalizeUrl(url)
+        ensureProjectIdNotInvalid(url)
         let response
         const startTime = new Date().getTime()
         try {
@@ -266,7 +294,8 @@ const api = {
     },
 
     async update(url: string, data: any): Promise<any> {
-        url = normalise_url(url)
+        url = normalizeUrl(url)
+        ensureProjectIdNotInvalid(url)
         const isFormData = data instanceof FormData
         const startTime = new Date().getTime()
         const response = await fetch(url, {
@@ -290,7 +319,8 @@ const api = {
     },
 
     async create(url: string, data?: any): Promise<any> {
-        url = normalise_url(url)
+        url = normalizeUrl(url)
+        ensureProjectIdNotInvalid(url)
         const isFormData = data instanceof FormData
         const startTime = new Date().getTime()
         const response = await fetch(url, {
@@ -314,7 +344,8 @@ const api = {
     },
 
     async delete(url: string): Promise<any> {
-        url = normalise_url(url)
+        url = normalizeUrl(url)
+        ensureProjectIdNotInvalid(url)
         const startTime = new Date().getTime()
         const response = await fetch(url, {
             method: 'DELETE',
