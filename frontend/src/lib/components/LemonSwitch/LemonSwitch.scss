@@ -1,14 +1,28 @@
-@import '~/vars';
-
 .LemonSwitch {
+    width: fit-content;
+    font-weight: 500;
+    &.LemonRow--disabled {
+        opacity: var(--opacity-disabled);
+    }
+
+    &.LemonRow--full-width {
+        width: 100%;
+    }
+}
+
+.LemonSwitch__button {
     position: relative;
     display: inline-block;
     flex-shrink: 0;
-    width: 36px;
-    height: 20px;
+    padding: 0;
+    width: 2.25rem;
+    height: 1.25rem;
     background: none;
     border: none;
     cursor: pointer;
+    .LemonRow--disabled & {
+        cursor: not-allowed;
+    }
 }
 
 .LemonSwitch__slider {
@@ -16,27 +30,16 @@
     left: 0;
     top: 5px;
     display: inline-block;
-    width: 36px;
-    height: 10px;
-    border-radius: 25px;
-    background-color: $border;
+    width: 2.25rem;
+    height: 0.625rem;
+    border-radius: 0.625rem;
+    background-color: var(--border);
     transition: background-color 100ms ease;
     .LemonSwitch--checked & {
-        background-color: rgba($primary, 0.25);
+        background-color: var(--depr-rgba-primary-0-25);
     }
     .LemonSwitch--alt.LemonSwitch--checked & {
-        background-color: rgba($primary_alt, 0.25);
-    }
-}
-
-.LemonSwitch--disabled {
-    cursor: not-allowed;
-    .LemonSwitch__handle {
-        border-color: $border_light;
-    }
-    .LemonSwitch__slider {
-        cursor: not-allowed;
-        background-color: $border_light;
+        background-color: var(--depr-rgba-primary-alt-0-25);
     }
 }
 
@@ -48,29 +51,8 @@
     height: 1.25rem;
     border-radius: 0.625rem;
     background-color: #fff;
-    border: 2px solid $border;
+    border: 2px solid var(--border);
     transition: background-color 100ms ease, transform 100ms ease, border-color 100ms ease;
-    &::after {
-        content: '';
-        transition: border-color 100ms ease;
-        animation: spin 1000ms linear infinite;
-        display: block;
-        position: absolute;
-        width: 100%;
-        height: 100%;
-        border-radius: 0.625rem;
-        border: 2px solid transparent;
-        border-left-color: transparent;
-    }
-    .LemonSwitch--loading &::after {
-        border-left-color: var(--primary);
-    }
-    .LemonSwitch--alt.LemonSwitch--loading &::after {
-        border-left-color: var(--primary-alt);
-    }
-    .LemonSwitch--loading.LemonSwitch--checked &::after {
-        border-left-color: #fff;
-    }
     .LemonSwitch--checked & {
         transform: translateX(1rem);
         background-color: var(--primary);
@@ -85,5 +67,12 @@
     }
     .LemonSwitch--active.LemonSwitch--checked & {
         transform: translateX(1rem) scale(1.1);
+    }
+}
+
+.LemonSwitch__label {
+    cursor: pointer;
+    .LemonRow--disabled & {
+        cursor: not-allowed;
     }
 }

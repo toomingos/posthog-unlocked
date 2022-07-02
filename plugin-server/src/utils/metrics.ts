@@ -1,5 +1,8 @@
-import * as Sentry from '@sentry/node'
 import { StatsD, Tags } from 'hot-shots'
+
+import { UUID } from './utils'
+
+type StopCallback = () => void
 
 export async function instrumentQuery<T>(
     statsd: StatsD | undefined,
@@ -15,5 +18,20 @@ export async function instrumentQuery<T>(
         return await runQuery()
     } finally {
         statsd?.timing(metricName, timer, tags)
+    }
+}
+
+export function captureEventLoopMetrics(statsd: StatsD, instanceId: UUID): StopCallback {
+    const timer = setInterval(() => {
+        const time = new Date()
+        setTimeout(() => {
+            statsd?.timing('event_loop_lag_set_timeout', time, {
+                instanceId: instanceId.toString(),
+            })
+        }, 0)
+    }, 2000)
+
+    return () => {
+        clearInterval(timer)
     }
 }

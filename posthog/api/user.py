@@ -13,8 +13,10 @@ from django.db import models
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import redirect
 from django.views.decorators.http import require_http_methods
+from django_filters.rest_framework import DjangoFilterBackend
 from loginas.utils import is_impersonated_session
-from rest_framework import mixins, permissions, serializers, viewsets
+from rest_framework import exceptions, mixins, permissions, serializers, viewsets
+from rest_framework.throttling import UserRateThrottle
 
 from posthog.api.organization import OrganizationSerializer
 from posthog.api.shared import OrganizationBasicSerializer, TeamBasicSerializer
@@ -23,6 +25,17 @@ from posthog.event_usage import report_user_updated
 from posthog.models import Team, User
 from posthog.models.organization import Organization
 from posthog.tasks import user_identify
+from posthog.utils import get_js_url
+
+
+class UserAuthenticationThrottle(UserRateThrottle):
+    rate = "5/minute"
+
+    def allow_request(self, request, view):
+        # only throttle non-GET requests
+        if request.method == "GET":
+            return True
+        return super().allow_request(request, view)
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -61,7 +74,6 @@ class UserSerializer(serializers.ModelSerializer):
         ]
         extra_kwargs = {
             "date_joined": {"read_only": True},
-            "is_staff": {"read_only": True},
             "password": {"write_only": True},
         }
 
@@ -116,6 +128,11 @@ class UserSerializer(serializers.ModelSerializer):
 
         return password
 
+    def validate_is_staff(self, value: bool) -> bool:
+        if not self.context["request"].user.is_staff:
+            raise exceptions.PermissionDenied("You are not a staff user, contact your instance admin.")
+        return value
+
     def update(self, instance: models.Model, validated_data: Any) -> Any:
 
         # Update current_organization and current_team
@@ -157,21 +174,36 @@ class UserSerializer(serializers.ModelSerializer):
         return super().to_representation(instance)
 
 
-class UserViewSet(mixins.RetrieveModelMixin, mixins.UpdateModelMixin, viewsets.GenericViewSet):
+class UserViewSet(mixins.RetrieveModelMixin, mixins.UpdateModelMixin, mixins.ListModelMixin, viewsets.GenericViewSet):
+    throttle_classes = [UserAuthenticationThrottle]
     serializer_class = UserSerializer
     permission_classes = [
         permissions.IsAuthenticated,
     ]
-    queryset = User.objects.none()
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = [
+        "is_staff",
+    ]
+    queryset = User.objects.filter(is_active=True)
     lookup_field = "uuid"
 
     def get_object(self) -> Any:
         lookup_value = self.kwargs[self.lookup_field]
         if lookup_value == "@me":
             return self.request.user
-        raise serializers.ValidationError(
-            "Currently this endpoint only supports retrieving `@me` instance.", code="invalid_parameter",
-        )
+
+        if not self.request.user.is_staff:
+            raise exceptions.PermissionDenied(
+                "As a non-staff user you're only allowed to access the `@me` user instance."
+            )
+
+        return super().get_object()
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        if not self.request.user.is_staff:
+            queryset = queryset.filter(id=self.request.user.id)
+        return queryset
 
 
 @authenticate_secondarily
@@ -195,15 +227,17 @@ def redirect_to_site(request):
         "dataAttributes": team.data_attributes,
     }
 
-    if settings.JS_URL:
-        params["jsURL"] = settings.JS_URL
+    if get_js_url(request):
+        params["jsURL"] = get_js_url(request)
 
     if not settings.TEST and not os.environ.get("OPT_OUT_CAPTURE"):
         params["instrument"] = True
         params["userEmail"] = request.user.email
         params["distinctId"] = request.user.distinct_id
 
-    state = urllib.parse.quote(json.dumps(params))
+    # pass the empty string as the safe param so that `//` is encoded correctly.
+    # see https://github.com/PostHog/posthog/issues/9671
+    state = urllib.parse.quote(json.dumps(params), safe="")
 
     if use_new_toolbar:
         return redirect("{}#__posthog={}".format(app_url, state))

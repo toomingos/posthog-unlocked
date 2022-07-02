@@ -34,16 +34,18 @@ export interface TooltipConfig {
     rowCutoff?: number
     colCutoff?: number
     renderSeries?: (value: React.ReactNode, seriesDatum: SeriesDatum, idx: number) => React.ReactNode
+    renderCount?: (value: number, seriesDatum: SeriesDatum | InvertedSeriesDatum, idx: number) => React.ReactNode
     showHeader?: boolean
+    hideColorCol?: boolean
 }
 
 export interface InsightTooltipProps extends TooltipConfig {
     date?: string
     hideInspectActorsSection?: boolean
     seriesData?: SeriesDatum[]
-    hideColorCol?: boolean
     forceEntitiesAsColumns?: boolean
     groupTypeLabel?: string
+    timezone?: string
 }
 
 export const COL_CUTOFF = 4

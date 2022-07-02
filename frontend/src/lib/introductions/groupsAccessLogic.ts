@@ -1,10 +1,10 @@
 import { kea } from 'kea'
 import { AvailableFeature } from '~/types'
 import { teamLogic } from 'scenes/teamLogic'
-import { preflightLogic } from 'scenes/PreflightCheck/logic'
+import { preflightLogic } from 'scenes/PreflightCheck/preflightLogic'
 import { userLogic } from 'scenes/userLogic'
 
-import { groupsAccessLogicType } from './groupsAccessLogicType'
+import type { groupsAccessLogicType } from './groupsAccessLogicType'
 export enum GroupsAccessStatus {
     AlreadyUsing,
     HasAccess,
@@ -13,31 +13,29 @@ export enum GroupsAccessStatus {
     Hidden,
 }
 
-export const groupsAccessLogic = kea<groupsAccessLogicType<GroupsAccessStatus>>({
+export const groupsAccessLogic = kea<groupsAccessLogicType>({
     path: ['lib', 'introductions', 'groupsAccessLogic'],
     connect: {
         values: [
             teamLogic,
             ['currentTeam'],
             preflightLogic,
-            ['clickhouseEnabled', 'preflight'],
+            ['preflight'],
             userLogic,
             ['hasAvailableFeature', 'upgradeLink'],
         ],
     },
     selectors: {
-        groupsCanBeEnabled: [(s) => [s.clickhouseEnabled], (clickhouseEnabled) => clickhouseEnabled],
         groupsEnabled: [
-            (s) => [s.groupsCanBeEnabled, s.hasAvailableFeature],
-            (groupsCanBeEnabled, hasAvailableFeature) =>
-                groupsCanBeEnabled && hasAvailableFeature(AvailableFeature.GROUP_ANALYTICS),
+            (s) => [s.hasAvailableFeature],
+            (hasAvailableFeature) => hasAvailableFeature(AvailableFeature.GROUP_ANALYTICS),
         ],
         // Used to toggle various introduction views related to groups
         groupsAccessStatus: [
-            (s) => [s.groupsCanBeEnabled, s.groupsEnabled, s.currentTeam, s.preflight],
-            (canBeEnabled, isEnabled, currentTeam, preflight): GroupsAccessStatus => {
+            (s) => [s.groupsEnabled, s.currentTeam, s.preflight],
+            (isEnabled, currentTeam, preflight): GroupsAccessStatus => {
                 const hasGroups = currentTeam?.has_group_types
-                if (!canBeEnabled || preflight?.instance_preferences?.disable_paid_fs) {
+                if (preflight?.instance_preferences?.disable_paid_fs) {
                     return GroupsAccessStatus.Hidden
                 } else if (isEnabled && hasGroups) {
                     return GroupsAccessStatus.AlreadyUsing
@@ -50,6 +48,5 @@ export const groupsAccessLogic = kea<groupsAccessLogicType<GroupsAccessStatus>>(
                 }
             },
         ],
-        showGroupsAnnouncementBanner: [(s) => [s.groupsAccessStatus], (status) => status !== GroupsAccessStatus.Hidden],
     },
 })

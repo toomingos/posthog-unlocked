@@ -1,14 +1,15 @@
 import json
-import logging
 import os
-from typing import Any, Dict, List, Optional, Tuple, Type, Union
+from typing import Any, Dict, List, Optional, Tuple
 
+import structlog
 from celery import group
 from dateutil.relativedelta import relativedelta
 from django.conf import settings
 from django.core.cache import cache
 from django.db.models import Q
-from django.db.models.expressions import F, Subquery
+from django.db.models.expressions import F
+from django.db.models.query import QuerySet
 from django.utils import timezone
 from sentry_sdk import capture_exception
 from statshog.defaults.django import statsd
@@ -21,91 +22,93 @@ from posthog.constants import (
     INSIGHT_STICKINESS,
     INSIGHT_TRENDS,
     TRENDS_STICKINESS,
-    FunnelOrderType,
     FunnelVizType,
 )
 from posthog.decorators import CacheType
-from posthog.models import Dashboard, Filter, Insight, Team
+from posthog.models import Dashboard, DashboardTile, Filter, Insight, Team
 from posthog.models.filters.stickiness_filter import StickinessFilter
 from posthog.models.filters.utils import get_filter
+from posthog.queries.funnels import ClickhouseFunnelTimeToConvert, ClickhouseFunnelTrends
+from posthog.queries.funnels.utils import get_funnel_order_class
+from posthog.queries.paths import Paths
+from posthog.queries.retention import Retention
+from posthog.queries.stickiness import Stickiness
+from posthog.queries.trends.trends import Trends
 from posthog.types import FilterType
-from posthog.utils import generate_cache_key, is_clickhouse_enabled
+from posthog.utils import generate_cache_key
 
 PARALLEL_INSIGHT_CACHE = int(os.environ.get("PARALLEL_DASHBOARD_ITEM_CACHE", 5))
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
-if is_clickhouse_enabled():
-    from ee.clickhouse.queries.funnels import (
-        ClickhouseFunnel,
-        ClickhouseFunnelBase,
-        ClickhouseFunnelStrict,
-        ClickhouseFunnelTimeToConvert,
-        ClickhouseFunnelTrends,
-        ClickhouseFunnelUnordered,
-    )
-    from ee.clickhouse.queries.paths import ClickhousePaths
-    from ee.clickhouse.queries.retention.clickhouse_retention import ClickhouseRetention
-    from ee.clickhouse.queries.stickiness.clickhouse_stickiness import ClickhouseStickiness
-    from ee.clickhouse.queries.trends.clickhouse_trends import ClickhouseTrends
-
-    CACHE_TYPE_TO_INSIGHT_CLASS = {
-        CacheType.TRENDS: ClickhouseTrends,
-        CacheType.STICKINESS: ClickhouseStickiness,
-        CacheType.RETENTION: ClickhouseRetention,
-        CacheType.PATHS: ClickhousePaths,
-    }
-else:
-    from posthog.queries.funnel import Funnel
-    from posthog.queries.paths import Paths
-    from posthog.queries.retention import Retention
-    from posthog.queries.stickiness import Stickiness
-    from posthog.queries.trends import Trends
-
-    CACHE_TYPE_TO_INSIGHT_CLASS = {
-        CacheType.TRENDS: Trends,
-        CacheType.STICKINESS: Stickiness,
-        CacheType.RETENTION: Retention,
-        CacheType.PATHS: Paths,
-    }
+CACHE_TYPE_TO_INSIGHT_CLASS = {
+    CacheType.TRENDS: Trends,
+    CacheType.STICKINESS: Stickiness,
+    CacheType.RETENTION: Retention,
+    CacheType.PATHS: Paths,
+}
 
 
 def update_cache_item(key: str, cache_type: CacheType, payload: dict) -> List[Dict[str, Any]]:
     timer = statsd.timer("update_cache_item_timer").start()
-    result: Optional[Union[List, Dict]] = None
     filter_dict = json.loads(payload["filter"])
     team_id = int(payload["team_id"])
-    filter = get_filter(data=filter_dict, team=Team(pk=team_id))
-
-    # Doing the filtering like this means we'll update _all_ Insights with the same filters hash
-    dashboard_items = Insight.objects.filter(team_id=team_id, filters_hash=key)
-    dashboard_items.update(refreshing=True)
+    team = Team.objects.get(pk=team_id)
+    filter = get_filter(data=filter_dict, team=team)
 
     try:
-        if cache_type == CacheType.FUNNEL:
-            result = _calculate_funnel(filter, key, team_id)
+        # Doing the filtering like this means we'll update _all_ Insights and DashboardTiles with the same filters hash
+        insights_queryset = Insight.objects.filter(Q(team_id=team_id, filters_hash=key))
+        dashboard_tiles_queryset = DashboardTile.objects.filter(insight__team_id=team_id, filters_hash=key)
+
+        # at least one must return something, if they both return they will be identical
+        insight_result = _update_cache_for_queryset(cache_type, filter, key, team, insights_queryset)
+        tiles_result = _update_cache_for_queryset(cache_type, filter, key, team, dashboard_tiles_queryset)
+
+        if tiles_result is not None:
+            result = tiles_result
+        elif insight_result is not None:
+            result = insight_result
         else:
-            result = _calculate_by_filter(filter, key, team_id, cache_type)
+            statsd.incr("update_cache_item_no_results", tags={"team": team_id, "cache_key": key})
+            return []
+
+    finally:
+        timer.stop()
+
+    return result
+
+
+def _update_cache_for_queryset(
+    cache_type: CacheType, filter: Filter, key: str, team: Team, queryset: QuerySet
+) -> Optional[List[Dict[str, Any]]]:
+    if not queryset.exists():
+        return None
+
+    queryset.update(refreshing=True)
+    try:
+        if cache_type == CacheType.FUNNEL:
+            result = _calculate_funnel(filter, key, team)
+        else:
+            result = _calculate_by_filter(filter, key, team, cache_type)
         cache.set(
             key, {"result": result, "type": cache_type, "last_refresh": timezone.now()}, settings.CACHED_RESULTS_TTL
         )
     except Exception as e:
-        timer.stop()
-        statsd.incr("update_cache_item_error")
-        dashboard_items.filter(refresh_attempt=None).update(refresh_attempt=0)
-        dashboard_items.update(refreshing=False, refresh_attempt=F("refresh_attempt") + 1)
+        statsd.incr("update_cache_item_error", tags={"team": team.id})
+        queryset.filter(refresh_attempt=None).update(refresh_attempt=0)
+        queryset.update(refreshing=False, refresh_attempt=F("refresh_attempt") + 1)
         raise e
 
-    timer.stop()
-    statsd.incr("update_cache_item_success")
-    dashboard_items.update(last_refresh=timezone.now(), refreshing=False, refresh_attempt=0)
+    statsd.incr("update_cache_item_success", tags={"team": team.id})
+    queryset.update(last_refresh=timezone.now(), refreshing=False, refresh_attempt=0)
     return result
 
 
-def update_dashboard_item_cache(dashboard_item: Insight, dashboard: Optional[Dashboard]) -> List[Dict[str, Any]]:
-    cache_key, cache_type, payload = dashboard_item_update_task_params(dashboard_item, dashboard)
+def update_insight_cache(insight: Insight, dashboard: Optional[Dashboard]) -> List[Dict[str, Any]]:
+    cache_key, cache_type, payload = insight_update_task_params(insight, dashboard)
     result = update_cache_item(cache_key, cache_type, payload)
-    dashboard_item.refresh_from_db()
+    insight.refresh_from_db()
     return result
 
 
@@ -126,79 +129,94 @@ def get_cache_type(filter: FilterType) -> CacheType:
         return CacheType.TRENDS
 
 
-def update_cached_items() -> None:
-
+def update_cached_items() -> Tuple[int, int]:
     tasks = []
-    items = (
-        Insight.objects.filter(
-            Q(Q(dashboard__is_shared=True) | Q(dashboard__last_accessed_at__gt=timezone.now() - relativedelta(days=7)))
+
+    # TODO: According to the metrics, on Cloud this is a huge list and needs to be improved
+    dashboard_tiles = (
+        DashboardTile.objects.filter(
+            Q(
+                Q(dashboard__sharingconfiguration__enabled=True)
+                | Q(dashboard__last_accessed_at__gt=timezone.now() - relativedelta(days=7))
+            )
         )
         .exclude(dashboard__deleted=True)
-        .exclude(refreshing=True)
+        .exclude(insight__deleted=True)
+        .exclude(insight__filters={})
+        .exclude(Q(insight__refreshing=True) | Q(refreshing=True))
+        .exclude(Q(insight__refresh_attempt__gt=2) | Q(refresh_attempt__gt=2))
+        .select_related("insight", "dashboard")
+        .order_by(F("last_refresh").asc(nulls_first=True), F("insight__last_refresh").asc(nulls_first=True))
+    )
+
+    for dashboard_tile in dashboard_tiles[0:PARALLEL_INSIGHT_CACHE]:
+        insight = dashboard_tile.insight
+        try:
+            cache_key, cache_type, payload = insight_update_task_params(insight, dashboard_tile.dashboard)
+            tasks.append(update_cache_item_task.s(cache_key, cache_type, payload))
+        except Exception as e:
+            # to avoid splitting the queryset above, update refresh attempt on both tile and insight
+            insight.refresh_attempt = (insight.refresh_attempt or 0) + 1
+            insight.save(update_fields=["refresh_attempt"])
+            dashboard_tile.refresh_attempt = (dashboard_tile.refresh_attempt or 0) + 1
+            dashboard_tile.save(update_fields=["refresh_attempt"])
+
+            capture_exception(e)
+
+    shared_insights = (
+        Insight.objects.filter(sharingconfiguration__enabled=True)
         .exclude(deleted=True)
-        .exclude(refresh_attempt__gt=2)
         .exclude(filters={})
+        .exclude(refreshing=True)
+        .exclude(refresh_attempt__gt=2)
         .order_by(F("last_refresh").asc(nulls_first=True))
     )
 
-    for item in items[0:PARALLEL_INSIGHT_CACHE]:
+    for insight in shared_insights[0:PARALLEL_INSIGHT_CACHE]:
         try:
-            cache_key, cache_type, payload = dashboard_item_update_task_params(item)
-            if item.filters_hash != cache_key:
-                item.save()  # force update if the saved key is different from the cache key
+            cache_key, cache_type, payload = insight_update_task_params(insight)
             tasks.append(update_cache_item_task.s(cache_key, cache_type, payload))
         except Exception as e:
-            item.refresh_attempt = (item.refresh_attempt or 0) + 1
-            item.save()
+            insight.refresh_attempt = (insight.refresh_attempt or 0) + 1
+            insight.save(update_fields=["refresh_attempt"])
             capture_exception(e)
 
     logger.info("Found {} items to refresh".format(len(tasks)))
     taskset = group(tasks)
     taskset.apply_async()
-    statsd.gauge("update_cache_queue_depth", items.count())
+    queue_depth = dashboard_tiles.count() + shared_insights.count()
+    statsd.gauge("update_cache_queue_depth", queue_depth)
+
+    return len(tasks), queue_depth
 
 
-def dashboard_item_update_task_params(
-    item: Insight, dashboard: Optional[Dashboard] = None
-) -> Tuple[str, CacheType, Dict]:
-    filter = get_filter(data=item.dashboard_filters(dashboard), team=item.team)
-    cache_key = generate_cache_key("{}_{}".format(filter.toJSON(), item.team_id))
+def insight_update_task_params(insight: Insight, dashboard: Optional[Dashboard] = None) -> Tuple[str, CacheType, Dict]:
+    filter = get_filter(data=insight.dashboard_filters(dashboard), team=insight.team)
+    cache_key = generate_cache_key("{}_{}".format(filter.toJSON(), insight.team_id))
 
     cache_type = get_cache_type(filter)
-    payload = {"filter": filter.toJSON(), "team_id": item.team_id}
+    payload = {"filter": filter.toJSON(), "team_id": insight.team_id}
 
     return cache_key, cache_type, payload
 
 
-def _calculate_by_filter(filter: FilterType, key: str, team_id: int, cache_type: CacheType) -> List[Dict[str, Any]]:
+def _calculate_by_filter(filter: FilterType, key: str, team: Team, cache_type: CacheType) -> List[Dict[str, Any]]:
     insight_class = CACHE_TYPE_TO_INSIGHT_CLASS[cache_type]
 
     if cache_type == CacheType.PATHS:
-        result = insight_class(filter, Team(pk=team_id)).run(filter, Team(pk=team_id))
+        result = insight_class(filter, team).run(filter, team)
     else:
-        result = insight_class().run(filter, Team(pk=team_id))
+        result = insight_class().run(filter, team)
     return result
 
 
-def _calculate_funnel(filter: Filter, key: str, team_id: int) -> List[Dict[str, Any]]:
-    team = Team(pk=team_id)
-
-    if is_clickhouse_enabled():
-        funnel_order_class: Type[ClickhouseFunnelBase] = ClickhouseFunnel
-        if filter.funnel_order_type == FunnelOrderType.UNORDERED:
-            funnel_order_class = ClickhouseFunnelUnordered
-        elif filter.funnel_order_type == FunnelOrderType.STRICT:
-            funnel_order_class = ClickhouseFunnelStrict
-
-        if filter.funnel_viz_type == FunnelVizType.TRENDS:
-            result = ClickhouseFunnelTrends(team=team, filter=filter, funnel_order_class=funnel_order_class).run()
-        elif filter.funnel_viz_type == FunnelVizType.TIME_TO_CONVERT:
-            result = ClickhouseFunnelTimeToConvert(
-                team=team, filter=filter, funnel_order_class=funnel_order_class
-            ).run()
-        else:
-            result = funnel_order_class(team=team, filter=filter).run()
+def _calculate_funnel(filter: Filter, key: str, team: Team) -> List[Dict[str, Any]]:
+    if filter.funnel_viz_type == FunnelVizType.TRENDS:
+        result = ClickhouseFunnelTrends(team=team, filter=filter).run()
+    elif filter.funnel_viz_type == FunnelVizType.TIME_TO_CONVERT:
+        result = ClickhouseFunnelTimeToConvert(team=team, filter=filter).run()
     else:
-        result = Funnel(filter=filter, team=team).run()
+        funnel_order_class = get_funnel_order_class(filter)
+        result = funnel_order_class(team=team, filter=filter).run()
 
     return result

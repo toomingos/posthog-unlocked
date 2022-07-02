@@ -6,18 +6,15 @@ import { annotationsTableLogic } from './logic'
 import { DeleteOutlined, RedoOutlined, ProjectOutlined, DeploymentUnitOutlined, DownOutlined } from '@ant-design/icons'
 import { annotationScopeToName } from 'lib/constants'
 import { PageHeader } from 'lib/components/PageHeader'
-import { PlusOutlined } from '@ant-design/icons'
 import { AnnotationType, AnnotationScope } from '~/types'
-import dayjsGenerateConfig from 'rc-picker/lib/generate/dayjs'
-import generatePicker from 'antd/lib/date-picker/generatePicker'
 import { SceneExport } from 'scenes/sceneTypes'
 import { dayjs } from 'lib/dayjs'
 import { Spinner } from 'lib/components/Spinner/Spinner'
 import { LemonTable, LemonTableColumns, LemonTableColumn } from 'lib/components/LemonTable'
 import { createdByColumn } from 'lib/components/LemonTable/columnUtils'
 import { TZLabel } from 'lib/components/TimezoneAware'
-
-const DatePicker = generatePicker<dayjs.Dayjs>(dayjsGenerateConfig)
+import { LemonButton } from 'lib/components/LemonButton'
+import { DatePicker } from 'lib/components/DatePicker'
 
 const { TextArea } = Input
 
@@ -103,14 +100,9 @@ export function Annotations(): JSX.Element {
                 title="Annotations"
                 caption="Here you can add organization- and project-wide annotations. Dashboard-specific ones can be added directly in the dashboard."
                 buttons={
-                    <Button
-                        type="primary"
-                        data-attr="create-annotation"
-                        onClick={(): void => setOpen(true)}
-                        icon={<PlusOutlined />}
-                    >
-                        New Annotation
-                    </Button>
+                    <LemonButton type="primary" data-attr="create-annotation" onClick={(): void => setOpen(true)}>
+                        New annotation
+                    </LemonButton>
                 }
             />
             <div>

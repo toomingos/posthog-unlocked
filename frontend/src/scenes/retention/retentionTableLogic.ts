@@ -1,4 +1,4 @@
-import dayjs from 'dayjs'
+import { dayjs } from 'lib/dayjs'
 import { kea } from 'kea'
 import api from 'lib/api'
 import { RETENTION_FIRST_TIME, RETENTION_RECURRING } from 'lib/constants'
@@ -15,7 +15,7 @@ import {
 import { actionsModel } from '~/models/actionsModel'
 import { groupsModel } from '~/models/groupsModel'
 import { ActionType, FilterType, InsightLogicProps, InsightType } from '~/types'
-import { retentionTableLogicType } from './retentionTableLogicType'
+import type { retentionTableLogicType } from './retentionTableLogicType'
 
 export const dateOptions = ['Hour', 'Day', 'Week', 'Month']
 
@@ -27,9 +27,16 @@ const dateOptionToTimeIntervalMap = {
     Month: 'M',
 }
 
+export const dateOptionPlurals = {
+    Hour: 'hours',
+    Day: 'days',
+    Week: 'weeks',
+    Month: 'months',
+}
+
 export const retentionOptions = {
-    [`${RETENTION_FIRST_TIME}`]: 'First Time',
-    [`${RETENTION_RECURRING}`]: 'Recurring',
+    [RETENTION_FIRST_TIME]: 'for the first time',
+    [RETENTION_RECURRING]: 'recurringly',
 }
 
 export const retentionOptionDescriptions = {

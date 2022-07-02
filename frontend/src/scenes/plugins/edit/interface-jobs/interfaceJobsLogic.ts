@@ -1,12 +1,10 @@
-import { FormInstance } from 'antd'
+import type { FormInstance } from 'antd/lib/form/hooks/useForm.d'
 import { kea } from 'kea'
 import api from 'lib/api'
-import { toast } from 'react-toastify'
-import { errorToast } from 'lib/utils'
-
-import { interfaceJobsLogicType } from './interfaceJobsLogicType'
+import type { interfaceJobsLogicType } from './interfaceJobsLogicType'
 import { pluginsLogic } from 'scenes/plugins/pluginsLogic'
 import { JobSpec } from '~/types'
+import { lemonToast } from 'lib/components/lemonToast'
 
 export const interfaceJobsLogic = kea<interfaceJobsLogicType>({
     props: {} as {
@@ -27,7 +25,7 @@ export const interfaceJobsLogic = kea<interfaceJobsLogicType>({
         setRunJobAvailable: (isAvailable: boolean) => ({ isAvailable }),
         runJob: (form: FormInstance<any>) => ({ form }),
         playButtonOnClick: (form: FormInstance<any>, jobHasEmptyPayload: boolean) => ({ form, jobHasEmptyPayload }),
-        setRunJobAvailableTimeout: (timeout: NodeJS.Timeout) => ({ timeout }),
+        setRunJobAvailableTimeout: (timeout: number) => ({ timeout }),
     },
     reducers: {
         isJobModalOpen: [
@@ -43,7 +41,7 @@ export const interfaceJobsLogic = kea<interfaceJobsLogicType>({
             },
         ],
         runJobAvailableTimeout: [
-            null as NodeJS.Timeout | null,
+            null as number | null,
             {
                 setRunJobAvailableTimeout: (_, { timeout }) => timeout,
             },
@@ -76,7 +74,7 @@ export const interfaceJobsLogic = kea<interfaceJobsLogicType>({
                     },
                 })
             } catch (error) {
-                errorToast(`Enqueuing job '${props.jobName}' failed`)
+                lemonToast.error(`Enqueuing job "${props.jobName}" failed`)
                 return
             }
 
@@ -89,12 +87,12 @@ export const interfaceJobsLogic = kea<interfaceJobsLogicType>({
             if (values.runJobAvailableTimeout) {
                 clearTimeout(values.runJobAvailableTimeout)
             }
-            setTimeout(() => {
-                const timeout = actions.setRunJobAvailable(true)
-                actions.setRunJobAvailableTimeout(timeout)
+            const timeout = window.setTimeout(() => {
+                actions.setRunJobAvailable(true)
             }, 15000)
+            actions.setRunJobAvailableTimeout(timeout)
 
-            toast.success('Job enqueued succesfully.')
+            lemonToast.success('Job has been enqueued')
         },
         playButtonOnClick: ({ form, jobHasEmptyPayload }) => {
             if (!values.runJobAvailable) {

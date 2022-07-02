@@ -1,28 +1,32 @@
-import { kea } from 'kea'
+import { BuiltLogic, kea } from 'kea'
 import { router } from 'kea-router'
-import { identifierToHuman, setPageTitle } from 'lib/utils'
 import posthog from 'posthog-js'
-import { sceneLogicType } from './sceneLogicType'
+import type { sceneLogicType } from './sceneLogicType'
 import { eventUsageLogic } from 'lib/utils/eventUsageLogic'
-import { preflightLogic } from './PreflightCheck/logic'
+import { preflightLogic } from './PreflightCheck/preflightLogic'
 import { AvailableFeature } from '~/types'
 import { userLogic } from './userLogic'
-import { afterLoginRedirect } from './authentication/loginLogic'
+import { handleLoginRedirect } from './authentication/loginLogic'
 import { teamLogic } from './teamLogic'
 import { urls } from 'scenes/urls'
 import { SceneExport, Params, Scene, SceneConfig, SceneParams, LoadedScene } from 'scenes/sceneTypes'
 import { emptySceneParams, preloadedScenes, redirects, routes, sceneConfigurations } from 'scenes/scenes'
 import { organizationLogic } from './organizationLogic'
+import { featureFlagLogic } from 'lib/logic/featureFlagLogic'
+import { UPGRADE_LINK } from 'lib/constants'
 
 /** Mapping of some scenes that aren't directly accessible from the sidebar to ones that are - for the sidebar. */
 const sceneNavAlias: Partial<Record<Scene, Scene>> = {
-    [Scene.InsightRouter]: Scene.Insight,
-    [Scene.Action]: Scene.Events,
-    [Scene.Actions]: Scene.Events,
-    [Scene.EventStats]: Scene.Events,
-    [Scene.EventPropertyStats]: Scene.Events,
+    [Scene.Action]: Scene.DataManagement,
+    [Scene.Actions]: Scene.DataManagement,
+    [Scene.EventDefinitions]: Scene.DataManagement,
+    [Scene.EventPropertyDefinitions]: Scene.DataManagement,
+    [Scene.EventDefinition]: Scene.DataManagement,
+    [Scene.EventPropertyDefinition]: Scene.DataManagement,
     [Scene.Person]: Scene.Persons,
+    [Scene.Cohort]: Scene.Cohorts,
     [Scene.Groups]: Scene.Persons,
+    [Scene.Experiment]: Scene.Experiments,
     [Scene.Group]: Scene.Persons,
     [Scene.Dashboard]: Scene.Dashboards,
     [Scene.FeatureFlag]: Scene.FeatureFlags,
@@ -32,6 +36,11 @@ export const sceneLogic = kea<sceneLogicType>({
     props: {} as {
         scenes?: Record<Scene, () => any>
     },
+    connect: () => ({
+        logic: [router, userLogic, preflightLogic],
+        values: [featureFlagLogic, ['featureFlags']],
+        actions: [router, ['locationChanged']],
+    }),
     path: ['scenes', 'sceneLogic'],
     actions: {
         /* 1. Prepares to open the scene, as the listener may override and do something
@@ -138,9 +147,9 @@ export const sceneLogic = kea<sceneLogicType>({
         ],
         activeSceneLogic: [
             (s) => [s.activeLoadedScene, s.sceneParams],
-            (activeLoadedScene, sceneParams) =>
+            (activeLoadedScene, sceneParams): BuiltLogic | null =>
                 activeLoadedScene?.logic
-                    ? activeLoadedScene.logic.build(activeLoadedScene.paramsToProps?.(sceneParams) || {}, false)
+                    ? activeLoadedScene.logic.build(activeLoadedScene.paramsToProps?.(sceneParams) || {})
                     : null,
         ],
         params: [(s) => [s.sceneParams], (sceneParams): Record<string, string> => sceneParams.params || {}],
@@ -200,15 +209,15 @@ export const sceneLogic = kea<sceneLogicType>({
         },
         takeToPricing: () => {
             posthog.capture('upgrade modal pricing interaction')
-            if (preflightLogic.values.preflight?.cloud) {
-                return router.actions.push('/organization/billing')
+            const link = UPGRADE_LINK(preflightLogic.values.preflight?.cloud)
+            if (link.target) {
+                window.open(link.url, link.target)
+            } else {
+                router.actions.push(link.url)
             }
-            const pricingTab = preflightLogic.values.preflight?.cloud ? 'cloud' : 'vpc'
-            window.open(`https://posthog.com/pricing?o=${pricingTab}`)
         },
         setScene: ({ scene, scrollToTop }, _, __, previousState) => {
             posthog.capture('$pageview')
-            setPageTitle(sceneConfigurations[scene]?.name || identifierToHuman(scene || ''))
 
             // if we clicked on a link, scroll to top
             const previousScene = selectors.scene(previousState)
@@ -237,7 +246,7 @@ export const sceneLogic = kea<sceneLogicType>({
                 // If user is already logged in, redirect away from unauthenticated-only routes (e.g. /signup)
                 if (sceneConfig.onlyUnauthenticated) {
                     if (scene === Scene.Login) {
-                        router.actions.replace(afterLoginRedirect())
+                        handleLoginRedirect()
                     } else {
                         router.actions.replace(urls.default())
                     }
@@ -261,8 +270,7 @@ export const sceneLogic = kea<sceneLogicType>({
                     } else if (
                         teamLogic.values.currentTeam &&
                         !teamLogic.values.currentTeam.completed_snippet_onboarding &&
-                        !location.pathname.startsWith('/ingestion') &&
-                        !location.pathname.startsWith('/personalization')
+                        !location.pathname.startsWith('/ingestion')
                     ) {
                         console.log('Ingestion tutorial not completed, redirecting to it')
                         router.actions.replace(urls.ingestion())
@@ -295,7 +303,7 @@ export const sceneLogic = kea<sceneLogicType>({
                 try {
                     window.ESBUILD_LOAD_CHUNKS?.(scene)
                     importedScene = await props.scenes[scene]()
-                } catch (error) {
+                } catch (error: any) {
                     if (
                         error.name === 'ChunkLoadError' || // webpack
                         error.message?.includes('Failed to fetch dynamically imported module') // esbuild
@@ -350,7 +358,7 @@ export const sceneLogic = kea<sceneLogicType>({
 
                 if (loadedScene.logic) {
                     // initialize the logic and give it 50ms to load before opening the scene
-                    const unmount = loadedScene.logic.build(loadedScene.paramsToProps?.(params) || {}, false).mount()
+                    const unmount = loadedScene.logic.build(loadedScene.paramsToProps?.(params) || {}).mount()
                     try {
                         await breakpoint(50)
                     } catch (e) {
@@ -364,6 +372,15 @@ export const sceneLogic = kea<sceneLogicType>({
         },
         reloadBrowserDueToImportError: () => {
             window.location.reload()
+        },
+        locationChanged: () => {
+            // Remove trailing slash
+            const {
+                location: { pathname, search, hash },
+            } = router.values
+            if (pathname !== '/' && pathname.endsWith('/')) {
+                router.actions.replace(pathname.replace(/(\/+)$/, ''), search, hash)
+            }
         },
     }),
 })

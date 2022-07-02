@@ -1,27 +1,38 @@
 import { kea } from 'kea'
-import { FEATURE_FLAGS } from 'lib/constants'
-import { groupsAccessLogic } from 'lib/introductions/groupsAccessLogic'
+import { FEATURE_FLAGS, OrganizationMembershipLevel } from 'lib/constants'
 import { featureFlagLogic } from 'lib/logic/featureFlagLogic'
-import { preflightLogic } from 'scenes/PreflightCheck/logic'
+import { preflightLogic } from 'scenes/PreflightCheck/preflightLogic'
+import { teamLogic } from 'scenes/teamLogic'
+import { userLogic } from 'scenes/userLogic'
+import { navigationLogic } from '../navigationLogic'
 
-import { announcementLogicType } from './announcementLogicType'
+import type { announcementLogicType } from './announcementLogicType'
 
 export enum AnnouncementType {
     Demo = 'Demo',
     CloudFlag = 'CloudFlag',
-    GroupAnalytics = 'GroupAnalytics',
+    NewFeature = 'NewFeature',
+    AttentionRequired = 'AttentionRequired',
 }
 
-export const announcementLogic = kea<announcementLogicType<AnnouncementType>>({
+// Switch to `false` if we're not showing a feature announcement. Hard-coded because the announcement needs to be manually updated anyways.
+const ShowNewFeatureAnnouncement = false
+const ShowAttentionRequiredBanner = false
+
+export const announcementLogic = kea<announcementLogicType>({
     path: ['layout', 'navigation', 'TopBar', 'announcementLogic'],
     connect: {
         values: [
             featureFlagLogic,
             ['featureFlags'],
-            groupsAccessLogic,
-            ['showGroupsAnnouncementBanner'],
             preflightLogic,
             ['preflight'],
+            userLogic,
+            ['user'],
+            navigationLogic,
+            ['asyncMigrationsOk'],
+            teamLogic,
+            ['currentTeam'],
         ],
     },
     actions: {
@@ -67,14 +78,23 @@ export const announcementLogic = kea<announcementLogicType<AnnouncementType>>({
             },
         ],
         relevantAnnouncementType: [
-            (s) => [s.cloudAnnouncement, s.showGroupsAnnouncementBanner, s.preflight],
-            (cloudAnnouncement, showGroupsAnnouncementBanner, preflight): AnnouncementType | null => {
+            (s) => [s.currentTeam, s.cloudAnnouncement, s.preflight, s.user, s.asyncMigrationsOk],
+            (currentTeam, cloudAnnouncement, preflight, user, asyncMigrationsOk): AnnouncementType | null => {
                 if (preflight?.demo) {
                     return AnnouncementType.Demo
                 } else if (cloudAnnouncement) {
                     return AnnouncementType.CloudFlag
-                } else if (showGroupsAnnouncementBanner) {
-                    return AnnouncementType.GroupAnalytics
+                } else if (!currentTeam || !currentTeam.completed_snippet_onboarding) {
+                    // Hide announcements during onboarding
+                    return null
+                } else if (
+                    ShowAttentionRequiredBanner &&
+                    !asyncMigrationsOk &&
+                    (user?.is_staff || (user?.organization?.membership_level ?? 0) >= OrganizationMembershipLevel.Admin)
+                ) {
+                    return AnnouncementType.AttentionRequired
+                } else if (ShowNewFeatureAnnouncement) {
+                    return AnnouncementType.NewFeature
                 }
                 return null
             },
@@ -84,7 +104,7 @@ export const announcementLogic = kea<announcementLogicType<AnnouncementType>>({
             (featureFlags): string | null => {
                 const flagValue = featureFlags[FEATURE_FLAGS.CLOUD_ANNOUNCEMENT]
                 return !!flagValue && typeof flagValue === 'string'
-                    ? featureFlags[FEATURE_FLAGS.CLOUD_ANNOUNCEMENT]
+                    ? String(featureFlags[FEATURE_FLAGS.CLOUD_ANNOUNCEMENT]).replace(/_/g, ' ')
                     : null
             },
         ],

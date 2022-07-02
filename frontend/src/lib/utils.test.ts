@@ -23,8 +23,21 @@ import {
     floorMsToClosestSecond,
     dateMapping,
     getFormattedLastWeekDate,
+    genericOperatorMap,
+    dateTimeOperatorMap,
+    stringOperatorMap,
+    numericOperatorMap,
+    chooseOperatorMap,
+    booleanOperatorMap,
+    roundToDecimal,
+    convertPropertyGroupToProperties,
+    convertPropertiesToPropertyGroup,
+    calculateDays,
+    range,
+    durationOperatorMap,
+    isExternalLink,
 } from './utils'
-import { ActionFilter, ElementType, PropertyOperator } from '~/types'
+import { ActionFilter, ElementType, FilterLogicalOperator, PropertyOperator, PropertyType, TimeUnitType } from '~/types'
 import { dayjs } from 'lib/dayjs'
 
 describe('toParams', () => {
@@ -130,15 +143,21 @@ describe('midEllipsis()', () => {
 })
 
 describe('isURL()', () => {
-    it('recognizes URLs propertly', () => {
+    it('recognizes URLs properly', () => {
         expect(isURL('https://www.posthog.com')).toEqual(true)
         expect(isURL('http://www.posthog.com')).toEqual(true)
         expect(isURL('http://www.posthog.com:8000/images')).toEqual(true)
         expect(isURL('http://localhost:8000/login?next=/insights')).toEqual(true)
         expect(isURL('http://localhost:8000/events?properties=%5B%5D')).toEqual(true)
+        expect(isURL('https://apple.com/')).toEqual(true)
+        expect(isURL('https://stripe.com')).toEqual(true)
+        expect(isURL('https://spotify.com')).toEqual(true)
+        expect(isURL('https://sevenapp.events/')).toEqual(true)
+        expect(isURL('https://seven-stagingenv.web.app/')).toEqual(true)
+        expect(isURL('https://salesforce.co.uk/')).toEqual(true)
     })
 
-    it('recognizes non-URLs propertly', () => {
+    it('recognizes non-URLs properly', () => {
         expect(isURL('1234567890')).toEqual(false)
         expect(isURL('www.posthog')).toEqual(false)
         expect(isURL('-.posthog')).toEqual(false)
@@ -146,6 +165,22 @@ describe('isURL()', () => {
         expect(isURL(1)).toEqual(false)
         expect(isURL(true)).toEqual(false)
         expect(isURL(null)).toEqual(false)
+    })
+})
+
+describe('isExternalLink()', () => {
+    it('recognizes external links properly', () => {
+        expect(isExternalLink('http://www.posthog.com')).toEqual(true)
+        expect(isExternalLink('https://www.posthog.com')).toEqual(true)
+        expect(isExternalLink('mailto:ben@posthog.com')).toEqual(true)
+    })
+
+    it('recognizes non-external links properly', () => {
+        expect(isExternalLink('path')).toEqual(false)
+        expect(isExternalLink('/path')).toEqual(false)
+        expect(isExternalLink(1)).toEqual(false)
+        expect(isExternalLink(true)).toEqual(false)
+        expect(isExternalLink(null)).toEqual(false)
     })
 })
 
@@ -161,6 +196,18 @@ describe('compactNumber()', () => {
         expect(compactNumber(null)).toEqual('-')
     })
 })
+
+describe('roundToDecimal()', () => {
+    it('formats number correctly', () => {
+        expect(roundToDecimal(null)).toEqual('-')
+        expect(roundToDecimal(293)).toEqual('293.00')
+        expect(roundToDecimal(102.121233)).toEqual('102.12')
+        expect(roundToDecimal(102.99999)).toEqual('103.00')
+        expect(roundToDecimal(1212)).toEqual('1212.00')
+        expect(roundToDecimal(1212, 3)).toEqual('1212.000')
+    })
+})
+
 describe('pluralize()', () => {
     it('handles singular cases', () => {
         expect(pluralize(1, 'member')).toEqual('1 member')
@@ -168,7 +215,7 @@ describe('pluralize()', () => {
         expect(pluralize(1, 'word', undefined, false)).toEqual('word')
     })
     it('handles plural cases', () => {
-        expect(pluralize(28321, 'member')).toEqual('28321 members')
+        expect(pluralize(28321, 'member')).toEqual('28,321 members')
         expect(pluralize(99, 'bacterium', 'bacteria')).toEqual('99 bacteria')
         expect(pluralize(3, 'word', undefined, false)).toEqual('words')
     })
@@ -512,5 +559,99 @@ describe('{floor|ceil}MsToClosestSecond()', () => {
             expect(floorMsToClosestSecond(1000)).toEqual(1000)
             expect(floorMsToClosestSecond(-1000)).toEqual(-1000)
         })
+    })
+
+    describe('choosing an operator for taxonomic filters', () => {
+        const testCases = [
+            { propertyType: PropertyType.DateTime, expected: dateTimeOperatorMap },
+            { propertyType: PropertyType.String, expected: stringOperatorMap },
+            { propertyType: PropertyType.Numeric, expected: numericOperatorMap },
+            { propertyType: PropertyType.Boolean, expected: booleanOperatorMap },
+            { propertyType: PropertyType.Duration, expected: durationOperatorMap },
+            { propertyType: undefined, expected: genericOperatorMap },
+        ]
+        testCases.forEach((testcase) => {
+            it(`correctly maps ${testcase.propertyType} to operator options`, () => {
+                expect(chooseOperatorMap(testcase.propertyType)).toEqual(testcase.expected)
+            })
+        })
+    })
+})
+
+describe('convertPropertyGroupToProperties()', () => {
+    it('converts a single layer property group into an array of properties', () => {
+        const propertyGroup = {
+            type: FilterLogicalOperator.And,
+            values: [
+                { type: FilterLogicalOperator.And, values: [{ key: '$browser' }, { key: '$current_url' }] },
+                { type: FilterLogicalOperator.And, values: [{ key: '$lib' }] },
+            ],
+        }
+        expect(convertPropertyGroupToProperties(propertyGroup)).toEqual([
+            { key: '$browser' },
+            { key: '$current_url' },
+            { key: '$lib' },
+        ])
+    })
+
+    it('converts a deeply nested property group into an array of properties', () => {
+        const propertyGroup = {
+            type: FilterLogicalOperator.And,
+            values: [
+                {
+                    type: FilterLogicalOperator.And,
+                    values: [{ type: FilterLogicalOperator.And, values: [{ key: '$lib' }] }],
+                },
+                { type: FilterLogicalOperator.And, values: [{ key: '$browser' }] },
+            ],
+        }
+        expect(convertPropertyGroupToProperties(propertyGroup)).toEqual([{ key: '$lib' }, { key: '$browser' }])
+    })
+})
+
+describe('convertPropertiesToPropertyGroup', () => {
+    it('converts properties to one AND operator property group', () => {
+        const properties = [{ key: '$lib' }, { key: '$browser' }, { key: '$current_url' }]
+        expect(convertPropertiesToPropertyGroup(properties)).toEqual({
+            type: FilterLogicalOperator.And,
+            values: [
+                {
+                    type: FilterLogicalOperator.And,
+                    values: [{ key: '$lib' }, { key: '$browser' }, { key: '$current_url' }],
+                },
+            ],
+        })
+    })
+
+    it('converts properties to one AND operator property group', () => {
+        expect(convertPropertiesToPropertyGroup(undefined)).toEqual({
+            type: FilterLogicalOperator.And,
+            values: [],
+        })
+    })
+})
+
+describe('calculateDays', () => {
+    it('1 day to 1 day', () => {
+        expect(calculateDays(1, TimeUnitType.Day)).toEqual(1)
+    })
+    it('1 week to 7 days', () => {
+        expect(calculateDays(1, TimeUnitType.Week)).toEqual(7)
+    })
+    it('1 month to 30 days', () => {
+        expect(calculateDays(1, TimeUnitType.Month)).toEqual(30)
+    })
+    it('1 year to 365 days', () => {
+        expect(calculateDays(1, TimeUnitType.Year)).toEqual(365)
+    })
+})
+
+describe('range', () => {
+    it('creates simple range', () => {
+        expect(range(4)).toEqual([0, 1, 2, 3])
+    })
+
+    it('creates offset range', () => {
+        expect(range(1, 5)).toEqual([1, 2, 3, 4])
     })
 })

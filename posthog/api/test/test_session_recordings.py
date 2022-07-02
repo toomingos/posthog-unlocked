@@ -8,7 +8,7 @@ from rest_framework import status
 
 from posthog.api.session_recording import DEFAULT_RECORDING_CHUNK_LIMIT
 from posthog.helpers.session_recording import Event, compress_and_chunk_snapshots
-from posthog.models import Organization, Person, SessionRecordingEvent
+from posthog.models import Organization, Person
 from posthog.models.session_recording_event import SessionRecordingViewed
 from posthog.models.team import Team
 from posthog.test.base import APIBaseTest
@@ -27,7 +27,7 @@ def factory_test_session_recordings_api(session_recording_event_factory):
             has_full_snapshot=True,
             type=2,
         ):
-            if team_id == None:
+            if team_id is None:
                 team_id = self.team.pk
             session_recording_event_factory(
                 team_id=team_id,
@@ -254,6 +254,25 @@ def factory_test_session_recordings_api(session_recording_event_factory):
                 len(response_data["result"]["snapshot_data_by_window_id"][""]), DEFAULT_RECORDING_CHUNK_LIMIT
             )
 
+        def test_get_snapshots_is_compressed(self):
+            base_time = now()
+            num_snapshots = 2  # small contents aren't compressed, needs to be enough data to trigger compression
+
+            for _ in range(num_snapshots):
+                self.create_snapshot("user", "1", base_time)
+
+            custom_headers = {"HTTP_ACCEPT_ENCODING": "gzip"}
+            response = self.client.get(
+                f"/api/projects/{self.team.id}/session_recordings/1/snapshots",
+                data=None,
+                follow=False,
+                secure=False,
+                **custom_headers,
+            )
+
+            self.assertEqual(response.status_code, status.HTTP_200_OK)
+            self.assertEqual(response.headers.get("Content-Encoding", None), "gzip")
+
         def test_get_snapshots_for_chunked_session_recording(self):
             chunked_session_id = "chunk_id"
             expected_num_requests = 3
@@ -365,7 +384,3 @@ def factory_test_session_recordings_api(session_recording_event_factory):
             self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     return TestSessionRecordings
-
-
-class TestSessionRecordingsAPI(factory_test_session_recordings_api(SessionRecordingEvent.objects.create)):  # type: ignore
-    pass

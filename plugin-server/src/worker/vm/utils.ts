@@ -31,7 +31,7 @@ export const postgresSetOnce = async (
     key: string,
     value: number
 ): Promise<void> => {
-    const se = await db.postgresQuery(
+    await db.postgresQuery(
         `
         INSERT INTO posthog_pluginstorage (plugin_config_id, key, value)
         VALUES ($1, $2, $3)
@@ -52,23 +52,5 @@ export const postgresGet = async (
         'SELECT * FROM posthog_pluginstorage WHERE "plugin_config_id"=$1 AND "key"=$2 LIMIT 1',
         [pluginConfigId, key],
         'storageGet'
-    )
-}
-
-export const addPublicJobIfNotExists = async (
-    db: DB,
-    pluginId: number,
-    jobName: string,
-    jobPayloadJson: Record<string, any>
-): Promise<void> => {
-    await db.postgresQuery(
-        `
-        UPDATE posthog_plugin
-        SET public_jobs = public_jobs || $1::jsonb
-        WHERE id = $2
-        AND (SELECT (public_jobs->$3) IS NULL)
-         `,
-        [JSON.stringify({ [jobName]: jobPayloadJson }), pluginId, jobName],
-        'addPublicJobIfNotExists'
     )
 }

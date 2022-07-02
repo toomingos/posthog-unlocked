@@ -7,8 +7,6 @@ import { SessionRecording } from './SessionRecording'
 import { WebhookIntegration } from './WebhookIntegration'
 import { useAnchor } from 'lib/hooks/useAnchor'
 import { router } from 'kea-router'
-import { ReloadOutlined } from '@ant-design/icons'
-import { red } from '@ant-design/colors'
 import { ToolbarSettings } from './ToolbarSettings'
 import { CodeSnippet } from 'scenes/ingestion/frameworks/CodeSnippet'
 import { teamLogic } from 'scenes/teamLogic'
@@ -17,7 +15,7 @@ import { PageHeader } from 'lib/components/PageHeader'
 import { Link } from 'lib/components/Link'
 import { JSBookmarklet } from 'lib/components/JSBookmarklet'
 import { RestrictedArea, RestrictionScope } from 'lib/components/RestrictedArea'
-import { OrganizationMembershipLevel } from 'lib/constants'
+import { FEATURE_FLAGS, OrganizationMembershipLevel } from 'lib/constants'
 import { TestAccountFiltersConfig } from './TestAccountFiltersConfig'
 import { TimezoneConfig } from './TimezoneConfig'
 import { DataAttributes } from 'scenes/project/Settings/DataAttributes'
@@ -33,6 +31,11 @@ import { urls } from 'scenes/urls'
 import { LemonTag } from 'lib/components/LemonTag/LemonTag'
 import { AuthorizedUrlsTable } from 'scenes/toolbar-launch/AuthorizedUrlsTable'
 import { GroupAnalytics } from 'scenes/project/Settings/GroupAnalytics'
+import { IconInfo, IconRefresh } from 'lib/components/icons'
+import { PersonDisplayNameProperties } from './PersonDisplayNameProperties'
+import { Tooltip } from 'lib/components/Tooltip'
+import { SlackIntegration } from './SlackIntegration'
+import { featureFlagLogic } from 'lib/logic/featureFlagLogic'
 
 export const scene: SceneExport = {
     component: ProjectSettings,
@@ -83,6 +86,7 @@ export function ProjectSettings(): JSX.Element {
     const { location } = useValues(router)
     const { user, hasAvailableFeature } = useValues(userLogic)
     const hasAdvancedPaths = user?.organization?.available_features?.includes(AvailableFeature.PATHS_ADVANCED)
+    const { featureFlags } = useValues(featureFlagLogic)
 
     useAnchor(location.hash)
 
@@ -131,16 +135,21 @@ export function ProjectSettings(): JSX.Element {
                 integrate the library for the specific language or platform you're using. We support Python, Ruby, Node,
                 Go, PHP, iOS, Android, and more.
                 <Divider />
-                <h2 id="project-api-key" className="subtitle">
-                    Project API key
+                <h2 id="project-variables" className="subtitle mb">
+                    Project Variables
                 </h2>
-                You can use this write-only key in any one of{' '}
-                <a href="https://posthog.com/docs/integrations">our libraries</a>.
+                <h3 id="project-api-key" className="l3">
+                    Project API Key
+                </h3>
+                <p>
+                    You can use this write-only key in any one of{' '}
+                    <a href="https://posthog.com/docs/integrations">our libraries</a>.
+                </p>
                 <CodeSnippet
                     actions={[
                         {
-                            Icon: ReloadOutlined,
-                            title: 'Reset Project API Key',
+                            icon: <IconRefresh />,
+                            title: 'Reset project API key',
                             popconfirmProps: {
                                 title: (
                                     <>
@@ -148,9 +157,8 @@ export function ProjectSettings(): JSX.Element {
                                         <b>This will invalidate the current API key and cannot be undone.</b>
                                     </>
                                 ),
-                                okText: 'Reset Key',
+                                okText: 'Reset key',
                                 okType: 'danger',
-                                icon: <ReloadOutlined style={{ color: red.primary }} />,
                                 placement: 'left',
                             },
                             callback: resetToken,
@@ -160,36 +168,52 @@ export function ProjectSettings(): JSX.Element {
                 >
                     {currentTeam?.api_token || ''}
                 </CodeSnippet>
-                Write-only means it can only create new events. It can't read events or any of your other data stored
-                with PostHog, so it's safe to use in public apps.
+                <p>
+                    Write-only means it can only create new events. It can't read events or any of your other data
+                    stored with PostHog, so it's safe to use in public apps.
+                </p>
+                <h3 id="project-id" className="l3 mt">
+                    Project ID
+                </h3>
+                <p>
+                    You can use this ID to reference your project in our <a href="https://posthog.com/docs/api">API</a>.
+                </p>
+                <CodeSnippet copyDescription="project ID">{String(currentTeam?.id || '')}</CodeSnippet>
                 <Divider />
                 <h2 className="subtitle" id="timezone">
                     Timezone
                 </h2>
-                <p>Set the timezone for your project so that you can see relevant time conversions in PostHog.</p>
+                <p>
+                    Set the timezone for your project. All charts will be based on this timezone, including how PostHog
+                    buckets data in day/week/month intervals.
+                </p>
                 <TimezoneConfig />
                 <Divider />
                 <h2 className="subtitle" id="internal-users-filtering">
-                    Filter out internal and test users
+                    Filter out internal and test users{' '}
+                    <Tooltip title='Events will still be ingested and saved, but they will be excluded from any queries where the "Filter out internal and test users" toggle is set.'>
+                        <IconInfo style={{ fontSize: '1em', color: 'var(--muted-alt)', marginTop: 4, marginLeft: 5 }} />
+                    </Tooltip>
                 </h2>
                 <p>
                     Increase the quality of your analytics results by filtering out events from internal sources, such
-                    as team members, test accounts, or development environments.
+                    as team members, test accounts, or development environments.{' '}
+                    <strong>
+                        The filters you apply here are added as extra filters when the toggle is switched on.
+                    </strong>{' '}
+                    So, if you apply a cohort, it means you will only match users in that cohort.
                 </p>
-                <p>
-                    <b>Events will still be ingested and saved</b> (and will count towards any totals), they will
-                    however be excluded from consideration on any queries where the "Filter out internal and test users"
-                    toggle is set.
-                </p>
-                <p>
-                    Example filters to use below: <i>email ∌ yourcompany.com</i> to exclude all events from your
-                    company's team members, or <i>Host ∌ localhost</i> to exclude all events from local development
-                    environments.
-                </p>
-                <p>
-                    <b>The filters you apply here are added as extra filters when the toggle is switched on.</b> So, if
-                    you apply a Cohort filter, it means toggling filtering on will match only this specific cohort.
-                </p>
+                <strong>Example filters</strong>
+                <ul>
+                    <li>
+                        "<strong>Email</strong> does not contain <strong>yourcompany.com</strong>" to exclude all events
+                        from your company's team members.
+                    </li>
+                    <li>
+                        "<strong>Host</strong> does not contain <strong>localhost</strong>" to exclude all events from
+                        local development environments.
+                    </li>
+                </ul>
                 <TestAccountFiltersConfig />
                 <Divider />
                 <CorrelationConfig />
@@ -226,17 +250,21 @@ export function ProjectSettings(): JSX.Element {
                     </>
                 )}
                 <Divider />
-                <div id="permitted-domains" />
+                <div id="permitted-domains" /> {/** DEPRECATED: Remove after Jun 1, 2022 */}
+                <div id="authorized-urls" />
                 <h2 className="subtitle" id="urls">
-                    Permitted domains/URLs
+                    Authorized URLs
                 </h2>
                 <p>
-                    These are the domains and URLs where the <b>Toolbar will automatically launch</b> (if you're logged
-                    in) and where we'll <b>record sessions</b> (if <a href="#session-recording">enabled</a>).
+                    These are the URLs where the{' '}
+                    <b>
+                        <Link to={urls.toolbarLaunch()}>Toolbar</Link> will automatically launch
+                    </b>{' '}
+                    (if you're logged in) and where we'll <b>record sessions</b> (if <a href="#recordings">enabled</a>).
                 </p>
                 <p>
-                    <b>Wilcard subdomains are permitted</b>: <code>https://*.example.com</code> You cannot use wildcard
-                    top-level domains as this could present a security risk.
+                    <b>Domains and wilcard subdomains are allowed</b> (example: <code>https://*.example.com</code>).
+                    However, wildcarded top-level domains cannot be used (for security reasons).
                 </p>
                 <AuthorizedUrlsTable />
                 <Divider />
@@ -245,11 +273,25 @@ export function ProjectSettings(): JSX.Element {
                 </h2>
                 <DataAttributes />
                 <Divider />
+                <h2 className="subtitle" id="person-display-name">
+                    Person Display Name
+                </h2>
+                <PersonDisplayNameProperties />
+                <Divider />
                 <h2 className="subtitle" id="webhook">
                     Webhook integration
                 </h2>
                 <WebhookIntegration />
                 <Divider />
+                {featureFlags[FEATURE_FLAGS.SUBSCRIPTIONS_SLACK] && (
+                    <>
+                        <h2 className="subtitle" id="slack">
+                            Slack integration
+                        </h2>
+                        <SlackIntegration />
+                        <Divider />
+                    </>
+                )}
                 <h2 className="subtitle" id="datacapture">
                     Data capture configuration
                 </h2>
@@ -258,7 +300,6 @@ export function ProjectSettings(): JSX.Element {
                 <h2 className="subtitle">PostHog Toolbar</h2>
                 <ToolbarSettings />
                 <Divider />
-                <div id="session-recording" />
                 <h2 id="recordings" className="subtitle" style={{ display: 'flex', alignItems: 'center' }}>
                     Recordings
                 </h2>
@@ -276,7 +317,7 @@ export function ProjectSettings(): JSX.Element {
                         posthog-js
                     </a>{' '}
                     <b>directly</b> installed, and the domains you wish to record must be set in{' '}
-                    <a href="#permitted-domains">Permitted domains/URLs</a>. For more details, check out our{' '}
+                    <a href="#authorized-urls">Authorized URLs</a>. For more details, check out our{' '}
                     <a
                         href="https://posthog.com/docs/user-guides/recordings?utm_campaign=session-recording&utm_medium=in-product"
                         target="_blank"

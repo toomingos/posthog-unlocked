@@ -1,7 +1,9 @@
 import { kea } from 'kea'
 import api from 'lib/api'
-import { cohortsModelType } from './cohortsModelType'
+import type { cohortsModelType } from './cohortsModelType'
 import { CohortType } from '~/types'
+import { personsLogic } from 'scenes/persons/personsLogic'
+import { deleteWithUndo, processCohort } from 'lib/utils'
 
 const POLL_TIMEOUT = 5000
 
@@ -10,7 +12,9 @@ export const cohortsModel = kea<cohortsModelType>({
     actions: () => ({
         setPollTimeout: (pollTimeout: number | null) => ({ pollTimeout }),
         updateCohort: (cohort: CohortType) => ({ cohort }),
+        deleteCohort: (cohort: Partial<CohortType>) => ({ cohort }),
         cohortCreated: (cohort: CohortType) => ({ cohort }),
+        exportCohortPersons: (id: CohortType['id']) => ({ id }),
     }),
 
     loaders: () => ({
@@ -19,7 +23,8 @@ export const cohortsModel = kea<cohortsModelType>({
             loadCohorts: async () => {
                 // TRICKY in tests this was returning undefined without calling list
                 const response = await api.cohorts.list()
-                return response?.results || []
+                personsLogic.findMounted({ syncWithUrl: true })?.actions.loadCohorts() // To ensure sync on person page
+                return response?.results?.map((cohort) => processCohort(cohort)) || []
             },
         },
     }),
@@ -44,18 +49,22 @@ export const cohortsModel = kea<cohortsModelType>({
                 }
                 return [cohort, ...state]
             },
-            deleteCohort: (state, cohort) => {
-                if (!cohort) {
+            deleteCohort: (state, { cohort }) => {
+                if (!cohort.id) {
                     return state
                 }
-                return [...state].filter((flag) => flag.id !== cohort.id)
+                return [...state].filter((c) => c.id !== cohort.id)
             },
-            deleteCohortSuccess: (state) => state,
         },
     },
 
     selectors: {
         cohortsWithAllUsers: [(s) => [s.cohorts], (cohorts) => [{ id: 'all', name: 'All Users*' }, ...cohorts]],
+        cohortsById: [
+            (s) => [s.cohorts],
+            (cohorts): Partial<Record<string | number, CohortType>> =>
+                Object.fromEntries(cohorts.map((cohort) => [cohort.id, cohort])),
+        ],
     },
 
     listeners: ({ actions }) => ({
@@ -65,6 +74,16 @@ export const cohortsModel = kea<cohortsModelType>({
                 return
             }
             actions.setPollTimeout(window.setTimeout(actions.loadCohorts, POLL_TIMEOUT))
+        },
+        exportCohortPersons: ({ id }) => {
+            window.open(`/api/person.csv?cohort=${id}`, '_blank')
+        },
+        deleteCohort: ({ cohort }) => {
+            deleteWithUndo({
+                endpoint: api.cohorts.determineDeleteEndpoint(),
+                object: cohort,
+                callback: actions.loadCohorts,
+            })
         },
     }),
 

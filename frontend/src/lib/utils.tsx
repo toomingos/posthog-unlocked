@@ -1,30 +1,40 @@
 import React, { CSSProperties, PropsWithChildren } from 'react'
 import api from './api'
-import { toast } from 'react-toastify'
-import { Button } from 'antd'
 import {
-    EventType,
-    FilterType,
     ActionFilter,
-    IntervalType,
-    ItemMode,
-    DashboardMode,
-    dateMappingOption,
-    GroupActorType,
-    ActorType,
     ActionType,
+    ActorType,
+    AnyCohortCriteriaType,
+    AnyPropertyFilter,
+    BehavioralCohortType,
+    BehavioralEventType,
+    CohortCriteriaGroupFilter,
+    CohortType,
+    dateMappingOption,
+    EventType,
+    FilterLogicalOperator,
+    FilterType,
+    GroupActorType,
+    IntervalType,
+    PropertyFilter,
     PropertyFilterValue,
+    PropertyGroupFilter,
+    PropertyGroupFilterValue,
+    PropertyType,
+    TimeUnitType,
 } from '~/types'
+import equal from 'fast-deep-equal'
 import { tagColors } from 'lib/colors'
-import { CustomerServiceOutlined, ExclamationCircleOutlined } from '@ant-design/icons'
 import { WEBHOOK_SERVICES } from 'lib/constants'
 import { KeyMappingInterface } from 'lib/components/PropertyKeyInfo'
 import { AlignType } from 'rc-trigger/lib/interface'
-import { DashboardEventSource } from './utils/eventUsageLogic'
-import { helpButtonLogic } from './components/HelpButton/HelpButton'
 import { dayjs } from 'lib/dayjs'
 import { Spinner } from './components/Spinner/Spinner'
 import { getAppContext } from './utils/getAppContext'
+import { isValidPropertyFilter } from './components/PropertyFilters/utils'
+import { IconCopy } from './components/icons'
+import { lemonToast } from './components/lemonToast'
+import { BehavioralFilterKey } from 'scenes/cohorts/CohortFilters/types'
 
 export const ANTD_TOOLTIP_PLACEMENTS: Record<any, AlignType> = {
     // `@yiminghe/dom-align` objects
@@ -81,6 +91,18 @@ export function areObjectValuesEmpty(obj?: Record<string, any>): boolean {
     )
 }
 
+// taken from https://stackoverflow.com/questions/10420352/converting-file-size-in-bytes-to-human-readable-string/10420404
+export const humanizeBytes = (fileSizeInBytes: number): string => {
+    let i = -1
+    const byteUnits = [' kB', ' MB', ' GB', ' TB', 'PB', 'EB', 'ZB', 'YB']
+    do {
+        fileSizeInBytes = fileSizeInBytes / 1024
+        i++
+    } while (fileSizeInBytes > 1024)
+
+    return Math.max(fileSizeInBytes, 0.1).toFixed(1) + byteUnits[i]
+}
+
 export function toParams(obj: Record<string, any>, explodeArrays: boolean = false): string {
     if (!obj) {
         return ''
@@ -133,107 +155,19 @@ export function fromParams(): Record<string, any> {
     return fromParamsGivenUrl(window.location.search)
 }
 
-export function percentage(division: number): string {
+/** Return percentage from number, e.g. 0.234 is 23.4%. */
+export function percentage(
+    division: number,
+    maximumFractionDigits: number = 2,
+    fixedPrecision: boolean = false
+): string {
     return division
-        ? division.toLocaleString(undefined, {
-              style: 'percent',
-              maximumFractionDigits: 2,
-          })
-        : ''
-}
-
-export function editingToast(
-    item: string,
-    setItemMode:
-        | ((mode: DashboardMode | null, source: DashboardEventSource) => void)
-        | ((mode: ItemMode | null, source: DashboardEventSource) => void)
-): any {
-    return toast(
-        <>
-            <h1>{item} edit mode</h1>
-            <p>Tap below when finished.</p>
-            <div className="text-right">
-                <Button>Finish editing</Button>
-            </div>
-        </>,
-        {
-            type: 'info',
-            autoClose: false,
-            onClick: () => setItemMode(null, DashboardEventSource.Toast),
-            closeButton: false,
-            className: 'drag-items-toast accent-border',
-        }
-    )
-}
-
-export function errorToast(title?: string, message?: string, errorDetail?: string, errorCode?: string): void {
-    /**
-     * Shows a standardized error toast when something goes wrong. Automated for any loader usage.
-     * @param title Title message of the toast
-     * @param message Body message on the toast
-     * @param errorDetail Error response returned from the server, or any other more specific error detail.
-     * @param errorCode Error code from the server that can help track the error.
-     */
-
-    const handleHelp = (): void => {
-        if (helpButtonLogic.isMounted()) {
-            helpButtonLogic.actions.showHelp()
-        } else {
-            window.open('https://posthog.com/support?utm_medium=in-product&utm_campaign=error-toast')
-        }
-    }
-
-    toast.dismiss('error') // This will ensure only the last error is shown
-
-    setTimeout(
-        () =>
-            toast.error(
-                <div>
-                    <h1>
-                        <ExclamationCircleOutlined /> {title || 'Something went wrong'}
-                    </h1>
-                    <p>
-                        {message || 'We could not complete your action. Detailed error:'}{' '}
-                        <span className="error-details">{errorDetail || 'Unknown exception.'}</span>
-                    </p>
-                    <p className="mt-05">
-                        Please <b>try again or contact us</b> if the error persists.
-                    </p>
-                    <div className="action-bar">
-                        {errorCode && <span>Code: {errorCode}</span>}
-                        <span className="help-button">
-                            <Button type="link" onClick={handleHelp}>
-                                <CustomerServiceOutlined /> Need help?
-                            </Button>
-                        </span>
-                    </div>
-                </div>,
-                {
-                    toastId: 'error', // will ensure only one error is displayed at a time
-                }
-            ),
-        100
-    )
-}
-
-export function successToast(title?: string, message?: string): void {
-    /**
-     * Shows a standardized success message.
-     * @param title Title message of the toast
-     * @param message Body message on the toast
-     */
-    setTimeout(
-        () =>
-            toast.success(
-                <div data-attr="success-toast">
-                    <h1>
-                        <ExclamationCircleOutlined /> {title || 'Success!'}
-                    </h1>
-                    <p>{message || 'Your action was completed successfully.'}</p>
-                </div>
-            ),
-        100
-    )
+        .toLocaleString('en-US', {
+            style: 'percent',
+            maximumFractionDigits,
+            minimumFractionDigits: fixedPrecision ? maximumFractionDigits : undefined,
+        })
+        .replace(',', ' ') // Use space as thousands separator as it's more international
 }
 
 export function Loading(props: Record<string, any>): JSX.Element {
@@ -260,14 +194,6 @@ export function TableRowLoading({
     )
 }
 
-export function SceneLoading(): JSX.Element {
-    return (
-        <div style={{ textAlign: 'center', marginTop: '20vh' }}>
-            <Spinner size="lg" />
-        </div>
-    )
-}
-
 export function deleteWithUndo({
     undo = false,
     ...props
@@ -282,18 +208,21 @@ export function deleteWithUndo({
         deleted: !undo,
     }).then(() => {
         props.callback?.()
-        const response = (
-            <span>
-                <b>{props.object.name || <i>Unnnamed</i>}</b>
-                {!undo ? ' deleted. Click to undo.' : ' deletion undone.'}
-            </span>
+        lemonToast[undo ? 'success' : 'info'](
+            <>
+                <b>{props.object.name || <i>{props.object.derived_name || 'Unnamed'}</i>}</b> has been{' '}
+                {undo ? 'restored' : 'deleted'}
+            </>,
+            {
+                toastId: `delete-item-${props.object.id}-${undo}`,
+                button: undo
+                    ? undefined
+                    : {
+                          label: 'Undo',
+                          action: () => deleteWithUndo({ undo: true, ...props }),
+                      },
+            }
         )
-        toast(response, {
-            toastId: `delete-item-${props.object.id}-${undo}`,
-            onClick: () => {
-                deleteWithUndo({ undo: true, ...props })
-            },
-        })
     })
 }
 
@@ -366,25 +295,78 @@ export const genericOperatorMap: Record<string, string> = {
     regex: '∼ matches regex',
     not_regex: "≁ doesn't match regex",
     gt: '> greater than',
-    lt: '< lower than',
+    lt: '< less than',
+    is_set: '✓ is set',
+    is_not_set: '✕ is not set',
+}
+
+export const stringOperatorMap: Record<string, string> = {
+    exact: '= equals',
+    is_not: "≠ doesn't equal",
+    icontains: '∋ contains',
+    not_icontains: "∌ doesn't contain",
+    regex: '∼ matches regex',
+    not_regex: "≁ doesn't match regex",
+    is_set: '✓ is set',
+    is_not_set: '✕ is not set',
+}
+
+export const numericOperatorMap: Record<string, string> = {
+    exact: '= equals',
+    is_not: "≠ doesn't equal",
+    regex: '∼ matches regex',
+    not_regex: "≁ doesn't match regex",
+    gt: '> greater than',
+    lt: '< less than',
     is_set: '✓ is set',
     is_not_set: '✕ is not set',
 }
 
 export const dateTimeOperatorMap: Record<string, string> = {
-    exact: '= equals',
-    is_not: "≠ doesn't equal",
-    regex: '∼ matches regex',
-    not_regex: "≁ doesn't match regex",
+    is_date_exact: '= equals',
     is_date_before: '< before',
     is_date_after: '> after',
     is_set: '✓ is set',
     is_not_set: '✕ is not set',
 }
 
+export const booleanOperatorMap: Record<string, string> = {
+    exact: '= equals',
+    is_not: "≠ doesn't equal",
+    is_set: '✓ is set',
+    is_not_set: '✕ is not set',
+}
+
+export const durationOperatorMap: Record<string, string> = {
+    gt: '> greater than',
+    lt: '< less than',
+}
+
 export const allOperatorsMapping: Record<string, string> = {
     ...dateTimeOperatorMap,
+    ...stringOperatorMap,
+    ...numericOperatorMap,
     ...genericOperatorMap,
+    ...booleanOperatorMap,
+    ...durationOperatorMap,
+    // slight overkill to spread all of these into the map
+    // but gives freedom for them to diverge more over time
+}
+
+const operatorMappingChoice: Record<keyof typeof PropertyType, Record<string, string>> = {
+    DateTime: dateTimeOperatorMap,
+    String: stringOperatorMap,
+    Numeric: numericOperatorMap,
+    Boolean: booleanOperatorMap,
+    Duration: durationOperatorMap,
+}
+
+export function chooseOperatorMap(propertyType: PropertyType | undefined): Record<string, string> {
+    let choice = genericOperatorMap
+    if (propertyType) {
+        choice = operatorMappingChoice[propertyType] || genericOperatorMap
+    }
+    return choice
 }
 
 export function isOperatorMulti(operator: string): boolean {
@@ -401,18 +383,18 @@ export function isOperatorRegex(operator: string): boolean {
 }
 
 export function isOperatorDate(operator: string): boolean {
-    return ['is_date_before', 'is_date_after'].includes(operator)
+    return ['is_date_before', 'is_date_after', 'is_date_exact'].includes(operator)
 }
 
 export function formatPropertyLabel(
     item: Record<string, any>,
-    cohorts: Record<string, any>[],
+    cohortsById: Partial<Record<CohortType['id'], CohortType>>,
     keyMapping: KeyMappingInterface,
     valueFormatter: (value: PropertyFilterValue | undefined) => string | string[] | null = (s) => [String(s)]
 ): string {
     const { value, key, operator, type } = item
     return type === 'cohort'
-        ? cohorts?.find((cohort) => cohort.id === value)?.name || value
+        ? cohortsById[value]?.name || `ID ${value}`
         : (keyMapping[type === 'element' ? 'element' : 'event'][key]?.label || key) +
               (isOperatorFlag(operator)
                   ? ` ${allOperatorsMapping[operator]}`
@@ -442,7 +424,7 @@ export function formatLabel(label: string, action: ActionFilter): string {
 }
 
 export function objectsEqual(obj1: any, obj2: any): boolean {
-    return JSON.stringify(obj1) === JSON.stringify(obj2)
+    return equal(obj1, obj2)
 }
 
 /** Returns "response" from: obj2 = { ...obj1, ...response }  */
@@ -504,9 +486,9 @@ export function slugify(text: string): string {
         .replace(/--+/g, '-')
 }
 
-// Number to number with commas (e.g. 1234 -> 1,234)
-export function humanFriendlyNumber(d: number): string {
-    return d.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+/** Format number with space as the thousands separator. */
+export function humanFriendlyNumber(d: number, precision: number = 2): string {
+    return d.toLocaleString('en-US', { maximumFractionDigits: precision })
 }
 
 export function humanFriendlyDuration(d: string | number | null | undefined, maxUnits?: number): string {
@@ -542,8 +524,8 @@ export function humanFriendlyDiff(from: dayjs.Dayjs | string, to: dayjs.Dayjs | 
 
 export function humanFriendlyDetailedTime(
     date: dayjs.Dayjs | string | null,
-    withSeconds: boolean = false,
-    formatString: string = 'MMMM DD, YYYY h:mm'
+    formatDate = 'MMMM DD, YYYY',
+    formatTime = 'h:mm:ss A'
 ): string {
     if (!date) {
         return 'Never'
@@ -554,15 +536,13 @@ export function humanFriendlyDetailedTime(
     if (parsedDate.isSame(dayjs(), 'm')) {
         return 'Just now'
     }
+    let formatString: string
     if (parsedDate.isSame(today, 'd')) {
-        formatString = '[Today] h:mm'
+        formatString = `[Today] ${formatTime}`
     } else if (parsedDate.isSame(yesterday, 'd')) {
-        formatString = '[Yesterday] h:mm'
-    }
-    if (withSeconds) {
-        formatString += ':ss A'
+        formatString = `[Yesterday] ${formatTime}`
     } else {
-        formatString += ' A'
+        formatString = `${formatDate} ${formatTime}`
     }
     return parsedDate.format(formatString)
 }
@@ -623,8 +603,16 @@ export function isURL(input: any): boolean {
     if (!input || typeof input !== 'string') {
         return false
     }
-    // Regex by elmervc
-    const regexp = new RegExp('^([a-zA-Z]+)://(-.)?(([^s/?.#-]+|([^s/?.#-]-[^s/?.#-])).?)+(/[^s]*)?', 'iu')
+    // Regex by regextester.com/115236
+    const regexp = /^(?:http(s)?:\/\/)([\w.-])+(?:[\w\.-]+)+([\w\-\._~:/?#[\]@%!\$&'\(\)\*\+,;=.])+$/
+    return !!input.trim().match(regexp)
+}
+
+export function isExternalLink(input: any): boolean {
+    if (!input || typeof input !== 'string') {
+        return false
+    }
+    const regexp = /^(https?:|mailto:)/
     return !!input.trim().match(regexp)
 }
 
@@ -743,6 +731,11 @@ export const dateMapping: Record<string, dateMappingOption> = {
             `${date.subtract(48, 'h').format(format)} - ${date.endOf('d').format(format)}`,
         inactive: true,
     },
+    'Last 3 days': {
+        values: ['-3d'],
+        getFormattedDate: (date: dayjs.Dayjs, format: string): string =>
+            `${date.subtract(3, 'd').format(format)} - ${date.endOf('d').format(format)}`,
+    },
     'Last 7 days': {
         values: ['-7d'],
         getFormattedDate: (date: dayjs.Dayjs, format: string): string =>
@@ -841,21 +834,18 @@ export function dateFilterToText(
 
 export function copyToClipboard(value: string, description: string = 'text'): boolean {
     if (!navigator.clipboard) {
-        toast.info('Oops! Clipboard capabilities are only available over HTTPS or on localhost.')
+        lemonToast.warning('Oops! Clipboard capabilities are only available over HTTPS or on localhost')
         return false
     }
 
     try {
         navigator.clipboard.writeText(value)
-        toast(
-            <div>
-                <h1 className="text-success">Copied to clipboard!</h1>
-                <p>{capitalizeFirstLetter(description)} has been copied to your clipboard.</p>
-            </div>
-        )
+        lemonToast.info(`Copied ${description} to clipboard`, {
+            icon: <IconCopy />,
+        })
         return true
     } catch (e) {
-        toast.error(`Could not copy ${description} to clipboard: ${e}`)
+        lemonToast.error(`Could not copy ${description} to clipboard: ${e}`)
         return false
     }
 }
@@ -928,8 +918,8 @@ export function sampleOne<T>(items: T[]): T {
     return items[Math.floor(Math.random() * items.length)]
 }
 
-/** Convert camelCase, PascalCase or snake_case to Sentence case. */
-export function identifierToHuman(identifier: string | number): string {
+/** Convert camelCase, PascalCase or snake_case to Sentence case or Title Case. */
+export function identifierToHuman(identifier: string | number, caseType: 'sentence' | 'title' = 'sentence'): string {
     const words: string[] = []
     let currentWord: string = ''
     String(identifier)
@@ -957,7 +947,9 @@ export function identifierToHuman(identifier: string | number): string {
     if (currentWord) {
         words.push(currentWord)
     }
-    return capitalizeFirstLetter(words.join(' '))
+    return capitalizeFirstLetter(
+        words.map((word) => (caseType === 'sentence' ? word : capitalizeFirstLetter(word))).join(' ')
+    )
 }
 
 export function parseGithubRepoURL(url: string): Record<string, string> {
@@ -1043,18 +1035,12 @@ export function autocorrectInterval(filters: Partial<FilterType>): IntervalType 
     }
 }
 
-export function pluralize(
-    count: number,
-    singular: string,
-    plural?: string,
-    includeNumber: boolean = true,
-    formatNumber: boolean = false
-): string {
+export function pluralize(count: number, singular: string, plural?: string, includeNumber: boolean = true): string {
     if (!plural) {
         plural = singular + 's'
     }
     const form = count === 1 ? singular : plural
-    return includeNumber ? `${formatNumber ? count.toLocaleString() : count} ${form}` : form
+    return includeNumber ? `${humanFriendlyNumber(count)} ${form}` : form
 }
 
 /** Return a number in a compact format, with a SI suffix if applicable.
@@ -1072,6 +1058,13 @@ export function compactNumber(value: number | null): string {
         value /= 1000
     }
     return value.toString() + ['', 'K', 'M', 'B', 'T', 'P', 'E', 'Z', 'Y'][magnitude]
+}
+
+export function roundToDecimal(value: number | null, places: number = 2): string {
+    if (value === null) {
+        return '-'
+    }
+    return (Math.round(value * 100) / 100).toFixed(places)
 }
 
 export function sortedKeys(object: Record<string, any>): Record<string, any> {
@@ -1095,14 +1088,17 @@ export function endWithPunctation(text?: string | null): string {
     return trimmedText
 }
 
-export function shortTimeZone(timeZone?: string, atDate?: Date): string {
+export function shortTimeZone(timeZone?: string, atDate?: Date): string | null {
     /**
      * Return the short timezone identifier for a specific timezone (e.g. BST, EST, PDT, UTC+2).
      * @param timeZone E.g. 'America/New_York'
      * @param atDate
      */
+    if (!timeZone) {
+        return null
+    }
     const date = atDate ? new Date(atDate) : new Date()
-    const localeTimeString = date.toLocaleTimeString('en-us', { timeZoneName: 'short', timeZone })
+    const localeTimeString = date.toLocaleTimeString('en-us', { timeZoneName: 'short', timeZone }).replace('GMT', 'UTC')
     return localeTimeString.split(' ')[2]
 }
 
@@ -1124,15 +1120,6 @@ export function resolveWebhookService(webhookUrl: string): string {
         }
     }
     return 'your webhook service'
-}
-
-export function maybeAddCommasToInteger(value: any): any {
-    const isNumber = !isNaN(value)
-    if (!isNumber) {
-        return value
-    }
-    const internationalNumberFormat = new Intl.NumberFormat('en-US')
-    return internationalNumberFormat.format(value)
 }
 
 function hexToRGB(hex: string): { r: number; g: number; b: number } {
@@ -1215,21 +1202,21 @@ export function sum(input: number[]): number {
     return input.reduce((a, b) => a + b, 0)
 }
 
-export function validateJsonFormItem(_: any, value: string): Promise<string | void> {
+export function validateJson(value: string): boolean {
     try {
         JSON.parse(value)
-        return Promise.resolve()
+        return true
     } catch (error) {
-        return Promise.reject('Not valid JSON!')
+        return false
     }
+}
+
+export function validateJsonFormItem(_: any, value: string): Promise<string | void> {
+    return validateJson(value) ? Promise.resolve() : Promise.reject('Not valid JSON!')
 }
 
 export function ensureStringIsNotBlank(s?: string | null): string | null {
     return typeof s === 'string' && s.trim() !== '' ? s : null
-}
-
-export function setPageTitle(title: string): void {
-    document.title = title ? `${title} • PostHog` : 'PostHog'
 }
 
 export function isMultiSeriesFormula(formula?: string): boolean {
@@ -1278,4 +1265,128 @@ export function getEventNamesForAction(actionId: string | number, allActions: Ac
         .flatMap((a) => a.steps?.filter((step) => step.event).map((step) => String(step.event)) as string[])
 }
 
+export function isPropertyGroup(
+    properties: PropertyGroupFilter | PropertyGroupFilterValue | AnyPropertyFilter[] | undefined | AnyPropertyFilter
+): properties is PropertyGroupFilter {
+    return (
+        (properties as PropertyGroupFilter)?.type !== undefined &&
+        (properties as PropertyGroupFilter)?.values !== undefined
+    )
+}
+
+export function flattenPropertyGroup(
+    flattenedProperties: AnyPropertyFilter[],
+    propertyGroup: PropertyGroupFilter | PropertyGroupFilterValue | AnyPropertyFilter
+): AnyPropertyFilter[] {
+    const obj: AnyPropertyFilter = {}
+    Object.keys(propertyGroup).forEach(function (k) {
+        obj[k] = propertyGroup[k]
+    })
+    if (isValidPropertyFilter(obj)) {
+        flattenedProperties.push(obj)
+    }
+    if (isPropertyGroup(propertyGroup)) {
+        return propertyGroup.values.reduce(flattenPropertyGroup, flattenedProperties)
+    }
+    return flattenedProperties
+}
+
+export function convertPropertiesToPropertyGroup(
+    properties: PropertyGroupFilter | AnyPropertyFilter[] | undefined
+): PropertyGroupFilter {
+    if (isPropertyGroup(properties)) {
+        return properties
+    }
+    if (properties && properties.length > 0) {
+        return { type: FilterLogicalOperator.And, values: [{ type: FilterLogicalOperator.And, values: properties }] }
+    }
+    return { type: FilterLogicalOperator.And, values: [] }
+}
+
+export function convertPropertyGroupToProperties(
+    properties?: PropertyGroupFilter | AnyPropertyFilter[]
+): PropertyFilter[] | undefined {
+    if (isPropertyGroup(properties)) {
+        return flattenPropertyGroup([], properties).filter(isValidPropertyFilter)
+    }
+    if (properties) {
+        return properties.filter(isValidPropertyFilter)
+    }
+    return properties
+}
+
 export const isUserLoggedIn = (): boolean => !getAppContext()?.anonymous
+
+/** Sorting function for Array.prototype.sort that works for numbers and strings automatically. */
+export const autoSorter = (a: any, b: any): number => {
+    return typeof a === 'number' && typeof b === 'number' ? a - b : String(a).localeCompare(String(b))
+}
+
+// https://stackoverflow.com/questions/175739/how-can-i-check-if-a-string-is-a-valid-number
+export function isNumeric(x: any): boolean {
+    if (typeof x === 'number') {
+        return true
+    }
+    if (typeof x != 'string') {
+        return false
+    }
+    return !isNaN(Number(x)) && !isNaN(parseFloat(x))
+}
+
+export function calculateDays(timeValue: number, timeUnit: TimeUnitType): number {
+    if (timeUnit === TimeUnitType.Year) {
+        return timeValue * 365
+    }
+    if (timeUnit === TimeUnitType.Month) {
+        return timeValue * 30
+    }
+    if (timeUnit === TimeUnitType.Week) {
+        return timeValue * 7
+    }
+    return timeValue
+}
+
+export function range(startOrEnd: number, end?: number): number[] {
+    let length = startOrEnd
+    let start = 0
+    if (typeof end == 'number') {
+        start = startOrEnd
+        length = end - start
+    }
+    return Array.from({ length }, (_, i) => i + start)
+}
+
+export function processCohort(cohort: CohortType): CohortType {
+    return {
+        ...cohort,
+        ...{
+            /* Populate value_property with value and overwrite value with corresponding behavioral filter type */
+            filters: {
+                properties: {
+                    ...cohort.filters.properties,
+                    values: (cohort.filters.properties?.values?.map((group) =>
+                        'values' in group
+                            ? {
+                                  ...group,
+                                  values: (group.values as AnyCohortCriteriaType[]).map((c) =>
+                                      c.type &&
+                                      [BehavioralFilterKey.Cohort, BehavioralFilterKey.Person].includes(c.type) &&
+                                      !('value_property' in c)
+                                          ? {
+                                                ...c,
+                                                value_property: c.value,
+                                                value:
+                                                    c.type === BehavioralFilterKey.Cohort
+                                                        ? BehavioralCohortType.InCohort
+                                                        : BehavioralEventType.HaveProperty,
+                                            }
+                                          : c
+                                  ),
+                              }
+                            : group
+                    ) ?? []) as CohortCriteriaGroupFilter[] | AnyCohortCriteriaType[],
+                },
+            },
+        },
+    }
+}

@@ -1,6 +1,6 @@
 // This file contains funnel-related components that are used in the general insights scope
 import { useActions, useValues } from 'kea'
-import { humanFriendlyDuration } from 'lib/utils'
+import { humanFriendlyDuration, percentage } from 'lib/utils'
 import React from 'react'
 import { Button, Row } from 'antd'
 import { InfoCircleOutlined } from '@ant-design/icons'
@@ -9,15 +9,12 @@ import { funnelLogic } from './funnelLogic'
 import './FunnelCanvasLabel.scss'
 import { chartFilterLogic } from 'lib/components/ChartFilter/chartFilterLogic'
 import { FunnelVizType, InsightType } from '~/types'
-import { formatDisplayPercentage } from './funnelUtils'
 import { Tooltip } from 'lib/components/Tooltip'
-import { FunnelStepsPicker } from 'scenes/insights/InsightTabs/FunnelTab/FunnelStepsPicker'
+import { FunnelStepsPicker } from 'scenes/insights/views/Funnels/FunnelStepsPicker'
 
 export function FunnelCanvasLabel(): JSX.Element | null {
     const { insightProps, filters, activeView } = useValues(insightLogic)
-    const { conversionMetrics, clickhouseFeaturesEnabled, aggregationTargetLabel } = useValues(
-        funnelLogic(insightProps)
-    )
+    const { conversionMetrics, aggregationTargetLabel } = useValues(funnelLogic(insightProps))
     const { setChartFilter } = useActions(chartFilterLogic(insightProps))
 
     if (activeView !== InsightType.FUNNELS) {
@@ -37,7 +34,7 @@ export function FunnelCanvasLabel(): JSX.Element | null {
                           Total conversion rate
                       </span>
                       <span className="text-muted-alt mr-025">:</span>
-                      <span className="l4">{formatDisplayPercentage(conversionMetrics.totalRate)}%</span>
+                      <span className="l4">{percentage(conversionMetrics.totalRate, 1, true)}</span>
                   </>,
               ]
             : []),
@@ -57,12 +54,18 @@ export function FunnelCanvasLabel(): JSX.Element | null {
                       <Button
                           type="link"
                           onClick={() => setChartFilter(FunnelVizType.TimeToConvert)}
-                          disabled={
-                              !clickhouseFeaturesEnabled || filters.funnel_viz_type === FunnelVizType.TimeToConvert
-                          }
+                          disabled={filters.funnel_viz_type === FunnelVizType.TimeToConvert}
                       >
                           <span className="l4">{humanFriendlyDuration(conversionMetrics.averageTime)}</span>
                       </Button>
+                  </>,
+              ]
+            : []),
+        ...(filters.funnel_viz_type === FunnelVizType.Trends
+            ? [
+                  <>
+                      <span className="text-muted-alt">Conversion rate </span>
+                      <FunnelStepsPicker />
                   </>,
               ]
             : []),

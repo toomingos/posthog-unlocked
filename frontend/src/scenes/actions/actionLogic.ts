@@ -1,15 +1,16 @@
 import { kea } from 'kea'
 import api from 'lib/api'
-import { actionLogicType } from './actionLogicType'
+import type { actionLogicType } from './actionLogicType'
 import { ActionType, Breadcrumb } from '~/types'
 import { urls } from 'scenes/urls'
+import { featureFlagLogic } from 'lib/logic/featureFlagLogic'
+import { FEATURE_FLAGS } from 'lib/constants'
 
 export interface ActionLogicProps {
     id?: ActionType['id']
-    onComplete: () => void
 }
 
-export const actionLogic = kea<actionLogicType<ActionLogicProps>>({
+export const actionLogic = kea<actionLogicType>({
     props: {} as ActionLogicProps,
     key: (props) => props.id || 'new',
     path: (key) => ['scenes', 'actions', 'actionLogic', key],
@@ -34,13 +35,30 @@ export const actionLogic = kea<actionLogicType<ActionLogicProps>>({
         ],
     }),
     selectors: {
+        shouldSimplifyActions: [
+            () => [featureFlagLogic.selectors.featureFlags],
+            (flags) => !!flags[FEATURE_FLAGS.SIMPLIFY_ACTIONS],
+        ],
         breadcrumbs: [
-            (s) => [s.action],
-            (action): Breadcrumb[] => [
-                {
-                    name: 'Events & Actions',
-                    path: urls.actions(),
-                },
+            (s) => [s.action, s.shouldSimplifyActions],
+            (action, shouldSimplifyActions): Breadcrumb[] => [
+                ...(shouldSimplifyActions
+                    ? [
+                          {
+                              name: `Data Management`,
+                              path: urls.eventDefinitions(),
+                          },
+                          {
+                              name: 'Events',
+                              path: urls.eventDefinitions(),
+                          },
+                      ]
+                    : [
+                          {
+                              name: 'Data Management',
+                              path: urls.actions(),
+                          },
+                      ]),
                 {
                     name: action?.name || 'Unnamed',
                     path: action ? urls.action(action.id) : undefined,
@@ -61,12 +79,11 @@ export const actionLogic = kea<actionLogicType<ActionLogicProps>>({
             },
         },
     }),
-    listeners: ({ actions, props, values }) => ({
+    listeners: ({ actions, values }) => ({
         checkIsFinished: ({ action }) => {
             if (action.is_calculating) {
                 actions.setPollTimeout(setTimeout(() => actions.loadAction(), 1000))
             } else {
-                props.onComplete()
                 actions.setIsComplete(new Date())
                 values.pollTimeout && clearTimeout(values.pollTimeout)
             }

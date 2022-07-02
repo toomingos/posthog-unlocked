@@ -1,18 +1,14 @@
-import json
+from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Any, Dict
+from typing import Any, Dict, Optional, Union
 
 from dateutil.relativedelta import relativedelta
 from django.test.client import Client
 from django.utils import timezone
 from freezegun import freeze_time
 
-from posthog.api.test.test_trends import NormalizedTrendResult, get_time_series_ok
 from posthog.constants import ENTITY_ID, ENTITY_TYPE
-from posthog.models import Action, ActionStep, Event, Person
 from posthog.models.team import Team
-from posthog.queries.abstract_test.test_compare import AbstractCompareTest
-from posthog.queries.stickiness import Stickiness
 from posthog.test.base import APIBaseTest
 from posthog.utils import encode_get_request_params
 
@@ -23,7 +19,7 @@ def get_stickiness(client: Client, team: Team, request: Dict[str, Any]):
 
 def get_stickiness_ok(client: Client, team: Team, request: Dict[str, Any]):
     response = get_stickiness(client=client, team=team, request=encode_get_request_params(data=request))
-    assert response.status_code == 200
+    assert response.status_code == 200, response.content
     return response.json()
 
 
@@ -42,9 +38,32 @@ def get_stickiness_people_ok(client: Client, team_id: int, request: Dict[str, An
     return response.json()
 
 
+def get_time_series_ok(data):
+    res = {}
+    for item in data["result"]:
+        collect_dates = {}
+        for idx, date in enumerate(item["days"]):
+            collect_dates[date] = NormalizedTrendResult(
+                value=item["data"][idx],
+                label=item["labels"][idx],
+                person_url=item["persons_urls"][idx]["url"],
+                breakdown_value=item.get("breakdown_value", None),
+            )
+        res[item["label"]] = collect_dates
+    return res
+
+
+@dataclass
+class NormalizedTrendResult:
+    value: float
+    label: str
+    person_url: str
+    breakdown_value: Optional[Union[str, int]]
+
+
 # parameterize tests to reuse in EE
 def stickiness_test_factory(stickiness, event_factory, person_factory, action_factory, get_earliest_timestamp):
-    class TestStickiness(APIBaseTest, AbstractCompareTest):
+    class TestStickiness(APIBaseTest):
         def _create_multiple_people(self, period=timedelta(days=1), event_properties=lambda index: {}):
             base_time = datetime.fromisoformat("2020-01-01T12:00:00.000000")
             p1 = person_factory(team_id=self.team.id, distinct_ids=["person1"], properties={"name": "person1"})
@@ -341,7 +360,7 @@ def stickiness_test_factory(stickiness, event_factory, person_factory, action_fa
             people = stickiness_response["results"][0]["people"]
 
             all_people_ids = [str(person["id"]) for person in people]
-            self.assertListEqual(sorted(all_people_ids), sorted([str(person1.pk), str(person4.pk)]))
+            self.assertListEqual(sorted(all_people_ids), sorted([str(person1.uuid), str(person4.uuid)]))
 
         def test_stickiness_people_with_entity_filter(self):
             person1, _, _, _ = self._create_multiple_people()
@@ -367,14 +386,12 @@ def stickiness_test_factory(stickiness, event_factory, person_factory, action_fa
             people = stickiness_response["results"][0]["people"]
 
             self.assertEqual(len(people), 1)
-            self.assertEqual(str(people[0]["id"]), str(person1.id))
+            self.assertEqual(str(people[0]["id"]), str(person1.uuid))
 
         def test_stickiness_people_paginated(self):
             for i in range(150):
                 person_name = f"person{i}"
-                person = person_factory(
-                    team_id=self.team.id, distinct_ids=[person_name], properties={"name": person_name}
-                )
+                person_factory(team_id=self.team.id, distinct_ids=[person_name], properties={"name": person_name})
                 event_factory(
                     team=self.team,
                     event="watched movie",
@@ -424,12 +441,13 @@ def stickiness_test_factory(stickiness, event_factory, person_factory, action_fa
             response = stickiness_response["result"]
             self.assertEqual(response[0]["data"], [2, 1, 1, 0, 0, 0, 0, 0])
             self.assertEqual(response[1]["data"], [3, 0, 0, 0, 0, 0, 0, 0])
+
             self.assertEqual(response[0]["compare_label"], "current")
             self.assertEqual(response[1]["compare_label"], "previous")
 
         def test_filter_test_accounts(self):
             self._create_multiple_people()
-            p1 = person_factory(team_id=self.team.id, distinct_ids=["ph"], properties={"email": "test@posthog.com"})
+            person_factory(team_id=self.team.id, distinct_ids=["ph"], properties={"email": "test@posthog.com"})
             event_factory(
                 team=self.team,
                 event="watched movie",
@@ -463,17 +481,3 @@ def stickiness_test_factory(stickiness, event_factory, person_factory, action_fa
             self.assertEqual(response[0]["data"][6], 0)
 
     return TestStickiness
-
-
-def _create_action(**kwargs):
-    team = kwargs.pop("team")
-    name = kwargs.pop("name")
-    event_name = kwargs.pop("event_name")
-    action = Action.objects.create(team=team, name=name)
-    ActionStep.objects.create(action=action, event=event_name)
-    action.calculate_events()
-    return action
-
-
-class DjangoStickinessTest(stickiness_test_factory(Stickiness, Event.objects.create, Person.objects.create, _create_action, Event.objects.earliest_timestamp)):  # type: ignore
-    pass

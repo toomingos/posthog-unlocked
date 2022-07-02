@@ -1,19 +1,25 @@
 import React, { useState } from 'react'
 import { Modal, Button, Card, Row, Col } from 'antd'
-import { SearchOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
+import { SearchOutlined } from '@ant-design/icons'
 import { router } from 'kea-router'
 import { urls } from 'scenes/urls'
 import { AuthorizedUrlsTable } from 'scenes/toolbar-launch/AuthorizedUrlsTable'
+import { IconEdit } from 'lib/components/icons'
+import { LemonButton } from 'lib/components/LemonButton'
+import { useValues } from 'kea'
+import { featureFlagLogic } from 'lib/logic/featureFlagLogic'
+import { FEATURE_FLAGS } from 'lib/constants'
 
 export function NewActionButton(): JSX.Element {
     const [visible, setVisible] = useState(false)
     const [appUrlsVisible, setAppUrlsVisible] = useState(false)
+    const { featureFlags } = useValues(featureFlagLogic)
 
     return (
         <>
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => setVisible(true)} data-attr="create-action">
-                New Action
-            </Button>
+            <LemonButton type="primary" onClick={() => setVisible(true)} data-attr="create-action">
+                New {featureFlags[FEATURE_FLAGS.SIMPLIFY_ACTIONS] ? 'Event' : 'Action'}
+            </LemonButton>
             <Modal
                 visible={visible}
                 style={{ cursor: 'pointer' }}
@@ -61,7 +67,7 @@ export function NewActionButton(): JSX.Element {
                                 size="small"
                             >
                                 <div style={{ textAlign: 'center', fontSize: 40 }} data-attr="new-action-pageview">
-                                    <EditOutlined />
+                                    <IconEdit />
                                 </div>
                             </Card>
                         </Col>

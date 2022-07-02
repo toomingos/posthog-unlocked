@@ -1,50 +1,23 @@
 import { tableConfigLogic } from 'lib/components/ResizableTable/tableConfigLogic'
 import { expectLogic } from 'kea-test-utils'
-import { initKeaTestLogic } from '~/test/init'
-import { router } from 'kea-router'
-import { mockAPI } from 'lib/api.mock'
-
-jest.mock('lib/api')
+import { initKeaTests } from '~/test/init'
 
 describe('tableConfigLogic', () => {
     let logic: ReturnType<typeof tableConfigLogic.build>
 
-    mockAPI(async ({ pathname, searchParams, method }) => {
-        throw new Error(`Unmocked ${method} fetch to: ${pathname} with params: ${JSON.stringify(searchParams)}`)
-    })
+    const startingColumns = 'DEFAULT'
 
-    const defaultColumns = ['a', 'b']
-    const availableColumns = [...defaultColumns, 'c', 'd', 'e']
-
-    initKeaTestLogic({
-        logic: tableConfigLogic,
-        props: { defaultColumns, availableColumns },
-        onLogic: (l) => {
-            logic = l
-        },
+    beforeEach(() => {
+        initKeaTests()
+        logic = tableConfigLogic({ startingColumns })
+        logic.mount()
     })
 
     it('starts with expected defaults', async () => {
         await expectLogic(logic).toMatchValues({
             modalVisible: false,
-            selectedColumns: 'DEFAULT',
+            selectedColumns: startingColumns,
             tableWidth: 7,
-        })
-    })
-
-    describe('column choices are stored in the URL', () => {
-        it('reads from the URL when present', async () => {
-            router.actions.push(router.values.location.pathname, { tableColumns: ['egg', 'beans', 'toast'] })
-            await expectLogic(logic).toMatchValues({
-                selectedColumns: ['egg', 'beans', 'toast'],
-            })
-        })
-
-        it('writes to the URL when column config changes', async () => {
-            await expectLogic(logic, () => {
-                logic.actions.setSelectedColumns(['soup', 'bread', 'greens'])
-            })
-            expect(router.values.searchParams).toHaveProperty('tableColumns', ['soup', 'bread', 'greens'])
         })
     })
 
@@ -69,9 +42,9 @@ describe('tableConfigLogic', () => {
         })
     })
 
-    it('sets table width to one more than column length to account for the button column', async () => {
+    it('sets table width to two more than column length to account for the Time and Actions column', async () => {
         await expectLogic(logic, () => logic.actions.setSelectedColumns(['a', 'b'])).toMatchValues({
-            tableWidth: 3,
+            tableWidth: 4,
         })
     })
 })

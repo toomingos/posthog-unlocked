@@ -1,13 +1,13 @@
 import { kea } from 'kea'
 import api from 'lib/api'
 import { toParams } from 'lib/utils'
-import { TrendResult } from '~/types'
+import { EditorProps, TrendResult } from '~/types'
 import { teamLogic } from 'scenes/teamLogic'
 import { dayjs } from 'lib/dayjs'
 import Fuse from 'fuse.js'
-import { authorizedUrlsLogicType } from './authorizedUrlsLogicType'
+import type { authorizedUrlsLogicType } from './authorizedUrlsLogicType'
 import { encodeParams } from 'kea-router'
-import { EditorProps } from '~/types'
+import { urls } from 'scenes/urls'
 
 /** defaultIntent: whether to launch with empty intent (i.e. toolbar mode is default) */
 export function appEditorUrl(appUrl?: string, actionId?: number, defaultIntent?: boolean): string {
@@ -27,7 +27,7 @@ export interface KeyedAppUrl {
     originalIndex: number
 }
 
-export const authorizedUrlsLogic = kea<authorizedUrlsLogicType<KeyedAppUrl>>({
+export const authorizedUrlsLogic = kea<authorizedUrlsLogicType>({
     path: (key) => ['lib', 'components', 'AppEditorLink', 'appUrlsLogic', key],
     key: (props) => `${props.pageKey}${props.actionId}` || 'global',
     props: {} as {
@@ -193,5 +193,12 @@ export const authorizedUrlsLogic = kea<authorizedUrlsLogicType<KeyedAppUrl>>({
             },
         ],
         launchUrl: [() => [], () => (url: string) => appEditorUrl(url, props.actionId, !props.actionId)],
+    }),
+    urlToAction: ({ actions }) => ({
+        [urls.toolbarLaunch()]: (_, searchParams) => {
+            if (searchParams.addNew) {
+                actions.newUrl()
+            }
+        },
     }),
 })

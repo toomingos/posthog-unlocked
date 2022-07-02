@@ -2,50 +2,29 @@ import React from 'react'
 import { useActions, useValues } from 'kea'
 import { humanFriendlyDuration } from '~/lib/utils'
 import { SessionRecordingType } from '~/types'
-import { Button, Col, Row, Typography } from 'antd'
+import { Button, Row, Typography } from 'antd'
 import { sessionRecordingsTableLogic } from './sessionRecordingsTableLogic'
-import { PlayCircleOutlined, CalendarOutlined, InfoCircleOutlined, FilterOutlined } from '@ant-design/icons'
+import { PlayCircleOutlined, CalendarOutlined, InfoCircleOutlined } from '@ant-design/icons'
 import { SessionPlayerDrawer } from './SessionPlayerDrawer'
-import { ActionFilter } from 'scenes/insights/ActionFilter/ActionFilter'
+import { ActionFilter } from 'scenes/insights/filters/ActionFilter/ActionFilter'
 import { LeftOutlined, RightOutlined } from '@ant-design/icons'
 import { DurationFilter } from './DurationFilter'
 import { PersonHeader } from 'scenes/persons/PersonHeader'
-import { RecordingWatchedSource } from 'lib/utils/eventUsageLogic'
+import { RecordingWatchedSource, SessionRecordingFilterType } from 'lib/utils/eventUsageLogic'
 import { DateFilter } from 'lib/components/DateFilter/DateFilter'
 import { Tooltip } from 'lib/components/Tooltip'
 import { TaxonomicFilterGroupType } from 'lib/components/TaxonomicFilter/types'
 import { PropertyFilters } from 'lib/components/PropertyFilters/PropertyFilters'
-import { preflightLogic } from 'scenes/PreflightCheck/logic'
 import './SessionRecordingTable.scss'
 import { LemonTable, LemonTableColumns } from 'lib/components/LemonTable'
 import { TZLabel } from 'lib/components/TimezoneAware'
+import { IconFilter } from 'lib/components/icons'
+import { LemonButton } from 'lib/components/LemonButton'
+import { MathAvailability } from 'scenes/insights/filters/ActionFilter/ActionFilterRow/ActionFilterRow'
 
 interface SessionRecordingsTableProps {
     personUUID?: string
     isPersonPage?: boolean
-}
-
-function FilterRow({
-    filter,
-    propertyFiltersButton,
-    deleteButton,
-}: {
-    seriesIndicator?: JSX.Element | string
-    suffix?: JSX.Element | string
-    filter?: JSX.Element | string
-    propertyFiltersButton?: JSX.Element | string
-    deleteButton?: JSX.Element | string
-    isVertical?: boolean
-}): JSX.Element {
-    return (
-        <Row className="entity-filter-row" wrap={false} align="middle">
-            <Col flex="1" className="mr">
-                <Row align="middle">{filter}</Row>
-            </Col>
-            <Col className="mr">{propertyFiltersButton}</Col>
-            <Col>{deleteButton}</Col>
-        </Row>
-    )
 }
 
 export function SessionRecordingsTable({ personUUID, isPersonPage = false }: SessionRecordingsTableProps): JSX.Element {
@@ -73,14 +52,14 @@ export function SessionRecordingsTable({ personUUID, isPersonPage = false }: Ses
         setDateRange,
         setDurationFilter,
         enableFilter,
+        reportRecordingsListFilterAdded,
     } = useActions(sessionRecordingsTableLogicInstance)
-    const { preflight } = useValues(preflightLogic)
 
     const columns: LemonTableColumns<SessionRecordingType> = [
         {
             title: 'Start time',
             render: function RenderStartTime(_: any, sessionRecording: SessionRecordingType) {
-                return <TZLabel time={sessionRecording.start_time} formatString="MMMM DD, YYYY h:mm" />
+                return <TZLabel time={sessionRecording.start_time} formatDate="MMMM DD, YYYY" formatTime="h:mm A" />
             },
         },
         {
@@ -117,7 +96,7 @@ export function SessionRecordingsTable({ personUUID, isPersonPage = false }: Ses
         <div className="session-recordings-table" data-attr="session-recordings-table">
             <Row className="filter-row">
                 <div className="filter-container" style={{ display: showFilters ? undefined : 'none' }}>
-                    <div>
+                    <div className="space-y-05">
                         <Typography.Text strong>
                             {`Filter by events and actions `}
                             <Tooltip title="Show recordings where all of the events or actions listed below happen.">
@@ -125,21 +104,17 @@ export function SessionRecordingsTable({ personUUID, isPersonPage = false }: Ses
                             </Tooltip>
                         </Typography.Text>
                         <ActionFilter
-                            fullWidth={true}
+                            bordered
                             filters={entityFilters}
                             setFilters={(payload) => {
+                                reportRecordingsListFilterAdded(SessionRecordingFilterType.EventAndAction)
                                 setEntityFilters(payload)
                             }}
                             typeKey={isPersonPage ? `person-${personUUID}` : 'session-recordings'}
-                            hideMathSelector={true}
-                            buttonCopy="Add another filter"
-                            horizontalUI
-                            stripeActionRow={false}
-                            propertyFilterWrapperClassName="session-recording-action-property-filter"
-                            customRowPrefix=""
+                            mathAvailability={MathAvailability.None}
+                            buttonCopy="Add filter"
                             hideRename
-                            showOr
-                            renderRow={(props) => <FilterRow {...props} />}
+                            hideDuplicate
                             showNestedArrow={false}
                             actionsTaxonomicGroupTypes={[
                                 TaxonomicFilterGroupType.Actions,
@@ -151,8 +126,8 @@ export function SessionRecordingsTable({ personUUID, isPersonPage = false }: Ses
                             ]}
                         />
                     </div>
-                    {!isPersonPage && preflight?.is_clickhouse_enabled && (
-                        <div className="mt-2">
+                    {!isPersonPage && (
+                        <div className="mt-2 space-y-05">
                             <Typography.Text strong>
                                 {`Filter by persons and cohorts `}
                                 <Tooltip title="Show recordings by persons who match the set criteria">
@@ -160,34 +135,39 @@ export function SessionRecordingsTable({ personUUID, isPersonPage = false }: Ses
                                 </Tooltip>
                             </Typography.Text>
                             <PropertyFilters
-                                popoverPlacement="bottomRight"
                                 pageKey={isPersonPage ? `person-${personUUID}` : 'session-recordings'}
                                 taxonomicGroupTypes={[
                                     TaxonomicFilterGroupType.PersonProperties,
                                     TaxonomicFilterGroupType.Cohorts,
                                 ]}
                                 propertyFilters={propertyFilters}
+                                useLemonButton
                                 onChange={(properties) => {
+                                    reportRecordingsListFilterAdded(SessionRecordingFilterType.PersonAndCohort)
                                     setPropertyFilters(properties)
                                 }}
                             />
                         </div>
                     )}
                 </div>
-                <Button
-                    style={{ display: showFilters ? 'none' : undefined }}
-                    onClick={() => {
-                        enableFilter()
-                        if (isPersonPage) {
-                            const entityFilterButtons = document.querySelectorAll('.entity-filter-row button')
-                            if (entityFilterButtons.length > 0) {
-                                ;(entityFilterButtons[0] as HTMLElement).click()
+                {!showFilters && (
+                    <LemonButton
+                        type="secondary"
+                        size="small"
+                        icon={<IconFilter />}
+                        onClick={() => {
+                            enableFilter()
+                            if (isPersonPage) {
+                                const entityFilterButtons = document.querySelectorAll('.entity-filter-row button')
+                                if (entityFilterButtons.length > 0) {
+                                    ;(entityFilterButtons[0] as HTMLElement).click()
+                                }
                             }
-                        }
-                    }}
-                >
-                    <FilterOutlined /> Filter recordings
-                </Button>
+                        }}
+                    >
+                        Filter recordings
+                    </LemonButton>
+                )}
 
                 <Row className="time-filter-row">
                     <Row className="time-filter">
@@ -203,6 +183,7 @@ export function SessionRecordingsTable({ personUUID, isPersonPage = false }: Ses
                             dateFrom={fromDate ?? undefined}
                             dateTo={toDate ?? undefined}
                             onChange={(changedDateFrom, changedDateTo) => {
+                                reportRecordingsListFilterAdded(SessionRecordingFilterType.DateRange)
                                 setDateRange(changedDateFrom, changedDateTo)
                             }}
                             dateOptions={{
@@ -217,6 +198,7 @@ export function SessionRecordingsTable({ personUUID, isPersonPage = false }: Ses
                         <Typography.Text className="filter-label">Duration</Typography.Text>
                         <DurationFilter
                             onChange={(newFilter) => {
+                                reportRecordingsListFilterAdded(SessionRecordingFilterType.Duration)
                                 setDurationFilter(newFilter)
                             }}
                             initialFilter={durationFilter}
@@ -240,6 +222,7 @@ export function SessionRecordingsTable({ personUUID, isPersonPage = false }: Ses
                 })}
                 rowClassName="cursor-pointer"
                 data-attr="session-recording-table"
+                emptyState="No matching recordings found"
             />
             {(hasPrev || hasNext) && (
                 <Row className="pagination-control">

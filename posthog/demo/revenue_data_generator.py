@@ -1,12 +1,20 @@
 import random
-import secrets
 
 from dateutil.relativedelta import relativedelta
 from django.utils.timezone import now
 
 from posthog.constants import TREND_FILTER_TYPE_ACTIONS
 from posthog.demo.data_generator import DataGenerator
-from posthog.models import Action, ActionStep, Dashboard, EventDefinition, Insight, Person, PropertyDefinition
+from posthog.models import (
+    Action,
+    ActionStep,
+    Dashboard,
+    DashboardTile,
+    EventDefinition,
+    Insight,
+    Person,
+    PropertyDefinition,
+)
 
 
 class RevenueDataGenerator(DataGenerator):
@@ -54,12 +62,9 @@ class RevenueDataGenerator(DataGenerator):
         free_trial_action = Action.objects.create(team=self.team, name="Entered Free Trial")
         ActionStep.objects.create(action=free_trial_action, event="entered_free_trial")
 
-        dashboard = Dashboard.objects.create(
-            name="Sales & Revenue", pinned=True, team=self.team, share_token=secrets.token_urlsafe(22)
-        )
-        Insight.objects.create(
+        dashboard = Dashboard.objects.create(name="Sales & Revenue", pinned=True, team=self.team)
+        insight = Insight.objects.create(
             team=self.team,
-            dashboard=dashboard,
             name="Entered Free Trial -> Purchase (Premium)",
             filters={
                 "events": [{"id": "$pageview", "name": "Pageview", "order": 0, "type": TREND_FILTER_TYPE_ACTIONS,}],
@@ -77,3 +82,5 @@ class RevenueDataGenerator(DataGenerator):
             },
             short_id="TEST1234",
         )
+        DashboardTile.objects.create(insight=insight, dashboard=dashboard)
+        dashboard.save()  # to update the insight's filter hash

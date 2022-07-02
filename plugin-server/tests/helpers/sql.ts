@@ -27,6 +27,39 @@ export interface ExtraDatabaseRows {
     pluginAttachments?: Omit<PluginAttachmentDB, 'id'>[]
 }
 
+export const POSTGRES_TRUNCATE_TABLES_QUERY = `
+TRUNCATE TABLE
+    posthog_personalapikey,
+    posthog_featureflag,
+    posthog_featureflaghashkeyoverride,
+    posthog_annotation,
+    posthog_dashboarditem,
+    posthog_dashboard,
+    posthog_cohortpeople,
+    posthog_cohort,
+    posthog_actionstep,
+    posthog_action_events,
+    posthog_action,
+    posthog_instancesetting,
+    posthog_sessionrecordingevent,
+    posthog_persondistinctid,
+    posthog_person,
+    posthog_event,
+    posthog_pluginstorage,
+    posthog_pluginattachment,
+    posthog_pluginconfig,
+    posthog_pluginsourcefile,
+    posthog_plugin,
+    posthog_eventdefinition,
+    posthog_propertydefinition,
+    posthog_grouptypemapping,
+    posthog_team,
+    posthog_organizationmembership,
+    posthog_organization,
+    posthog_user
+CASCADE
+`
+
 export async function resetTestDatabase(
     code?: string,
     extraServerConfig: Partial<PluginsServerConfig> = {},
@@ -39,38 +72,7 @@ export async function resetTestDatabase(
         await db.query('TRUNCATE TABLE ee_hook CASCADE')
     } catch {}
 
-    await db.query(`
-        TRUNCATE TABLE
-            posthog_personalapikey,
-            posthog_featureflag,
-            posthog_annotation,
-            posthog_dashboarditem,
-            posthog_dashboard,
-            posthog_cohortpeople,
-            posthog_cohort,
-            posthog_actionstep,
-            posthog_action_events,
-            posthog_action,
-            posthog_element,
-            posthog_elementgroup,
-            posthog_sessionrecordingevent,
-            posthog_persondistinctid,
-            posthog_person,
-            posthog_event,
-            posthog_pluginstorage,
-            posthog_pluginattachment,
-            posthog_pluginlogentry,
-            posthog_pluginconfig,
-            posthog_plugin,
-            posthog_eventdefinition,
-            posthog_propertydefinition,
-            posthog_grouptypemapping,
-            posthog_team,
-            posthog_organizationmembership,
-            posthog_organization,
-            posthog_user
-        CASCADE
-    `)
+    await db.query(POSTGRES_TRUNCATE_TABLES_QUERY)
     const mocks = makePluginObjects(code)
     const teamIds = mocks.pluginConfigRows.map((c) => c.team_id)
     const teamIdToCreate = teamIds[0]
@@ -80,6 +82,7 @@ export async function resetTestDatabase(
             id: teamIdToCreate + 67,
             team_id: teamIdToCreate,
             name: 'Test Action',
+            description: '',
             created_at: new Date().toISOString(),
             created_by_id: commonUserId,
             deleted: false,
@@ -115,7 +118,10 @@ export async function resetTestDatabase(
     await db.end()
 }
 
-export async function insertRow(db: Pool, table: string, object: Record<string, any>): Promise<void> {
+export async function insertRow(db: Pool, table: string, objectProvided: Record<string, any>): Promise<void> {
+    // Handling of related fields
+    const { source__plugin_json, source__index_ts, source__frontend_tsx, ...object } = objectProvided
+
     const keys = Object.keys(object)
         .map((key) => `"${key}"`)
         .join(',')
@@ -130,7 +136,47 @@ export async function insertRow(db: Pool, table: string, object: Record<string, 
     })
 
     try {
-        await db.query(`INSERT INTO ${table} (${keys}) VALUES (${params})`, values)
+        const {
+            rows: [rowSaved],
+        } = await db.query(`INSERT INTO ${table} (${keys}) VALUES (${params}) RETURNING *`, values)
+        const dependentQueries: Promise<void>[] = []
+        if (source__plugin_json) {
+            dependentQueries.push(
+                insertRow(db, 'posthog_pluginsourcefile', {
+                    id: new UUIDT().toString(),
+                    filename: 'plugin.json',
+                    source: source__plugin_json,
+                    plugin_id: rowSaved.id,
+                    error: null,
+                    transpiled: null,
+                })
+            )
+        }
+        if (source__index_ts) {
+            dependentQueries.push(
+                insertRow(db, 'posthog_pluginsourcefile', {
+                    id: new UUIDT().toString(),
+                    filename: 'index.ts',
+                    source: source__index_ts,
+                    plugin_id: rowSaved.id,
+                    error: null,
+                    transpiled: null,
+                })
+            )
+        }
+        if (source__frontend_tsx) {
+            dependentQueries.push(
+                insertRow(db, 'posthog_pluginsourcefile', {
+                    id: new UUIDT().toString(),
+                    filename: 'frontend.tsx',
+                    source: source__frontend_tsx,
+                    plugin_id: rowSaved.id,
+                    error: null,
+                    transpiled: null,
+                })
+            )
+        }
+        await Promise.all(dependentQueries)
     } catch (error) {
         console.error(`Error on table ${table} when inserting object:\n`, object, '\n', error)
         throw error
@@ -164,8 +210,8 @@ export async function createUserTeamAndOrganization(
         plugins_access_level: 9,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-        personalization: '{}',
-        setup_section_2_completed: true,
+        personalization: '{}', // DEPRECATED
+        setup_section_2_completed: true, // DEPRECATED
         for_internal_metrics: false,
         available_features: [],
         domain_whitelist: [],
@@ -204,6 +250,7 @@ export async function createUserTeamAndOrganization(
         test_account_filters: [],
         timezone: 'UTC',
         data_attributes: ['data-attr'],
+        person_display_name_properties: [],
         access_control: false,
     })
 }

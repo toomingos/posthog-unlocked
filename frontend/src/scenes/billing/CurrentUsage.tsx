@@ -4,6 +4,9 @@ import { compactNumber } from 'lib/utils'
 import React from 'react'
 import { billingLogic } from './billingLogic'
 import { Tooltip } from 'lib/components/Tooltip'
+import { LemonTable, LemonTableColumns } from 'lib/components/LemonTable'
+import { BillingTierType } from '~/types'
+import { dayjs } from 'lib/dayjs'
 
 export function CurrentUsage(): JSX.Element | null {
     const { eventAllocation, percentage, strokeColor, billing } = useValues(billingLogic)
@@ -12,6 +15,37 @@ export function CurrentUsage(): JSX.Element | null {
     if (!billing) {
         return null
     }
+
+    const columns: LemonTableColumns<BillingTierType> = [
+        {
+            title: 'Tier',
+            dataIndex: 'name',
+        },
+        {
+            title: 'Price per event',
+            render: function Render(_, billingTier: BillingTierType): JSX.Element {
+                return <div>${billingTier.price_per_event}</div>
+            },
+        },
+        {
+            title: 'Number of events',
+            dataIndex: 'number_of_events',
+        },
+        {
+            title: 'Sub-total',
+            render: function Render(_, billingTier: BillingTierType): JSX.Element {
+                return <div>${billingTier.subtotal}</div>
+            },
+        },
+        {
+            title: 'Running total',
+            render: function Render(_, billingTier: BillingTierType): JSX.Element {
+                return <div>${billingTier.running_total}</div>
+            },
+        },
+    ]
+
+    const usage = billing.current_bill_usage || billing.current_usage
 
     return (
         <>
@@ -29,6 +63,7 @@ export function CurrentUsage(): JSX.Element | null {
                                 <div className="bill-amount">
                                     {`$${billing?.current_bill_amount?.toLocaleString()}`}
                                 </div>
+                                <LemonTable columns={columns} dataSource={billing.tiers || []} />
                             </>
                         ) : (
                             <>
@@ -43,13 +78,14 @@ export function CurrentUsage(): JSX.Element | null {
                     </>
                 )}
                 <h3 className="l3 mt">Current event usage</h3>
-                {billing.current_usage !== null ? (
+                {usage !== null ? (
                     <>
                         Your organization has used{' '}
-                        <Tooltip title={`${billing.current_usage.toLocaleString()} events`}>
-                            <b>{compactNumber(billing.current_usage)}</b>
+                        <Tooltip title={`${usage.toLocaleString()} events`}>
+                            <b>{compactNumber(usage)}</b>
                         </Tooltip>{' '}
-                        events this month (calculated roughly every hour).{' '}
+                        events {billing.current_bill_usage ? 'this billing period' : 'this month'} (calculated every
+                        day).{' '}
                         {eventAllocation && (
                             <>
                                 You can use up to <b>{compactNumber(eventAllocation)}</b> events per month.
@@ -65,13 +101,6 @@ export function CurrentUsage(): JSX.Element | null {
                             strokeColor={strokeColor}
                             status={percentage !== null ? 'normal' : 'success'}
                         />
-                        {plan?.is_metered_billing && (
-                            <div className="mt text-muted">
-                                This is the number of events that your organization has ingested across all your
-                                projects for the <b>current month</b> and that <b>will be billed</b> a few days after
-                                the end of the month.
-                            </div>
-                        )}
                     </>
                 ) : (
                     <div>
@@ -81,6 +110,19 @@ export function CurrentUsage(): JSX.Element | null {
                             contact us
                         </a>{' '}
                         if this message does not disappear.
+                    </div>
+                )}
+                {billing?.current_bill_cycle && (
+                    <div className="mt text-muted">
+                        Your current billing period runs from{' '}
+                        <strong>
+                            {dayjs.unix(billing.current_bill_cycle.current_period_start).format('MMMM DD, YYYY')}
+                        </strong>{' '}
+                        until{' '}
+                        <strong>
+                            {dayjs.unix(billing.current_bill_cycle.current_period_end).format('MMMM DD, YYYY')}
+                        </strong>
+                        , which is when you'll be charged.
                     </div>
                 )}
             </Card>

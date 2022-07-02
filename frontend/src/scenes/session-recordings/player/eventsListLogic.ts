@@ -1,7 +1,7 @@
 import { kea } from 'kea'
 import { PlayerPosition, RecordingEventsFilters, RecordingEventType } from '~/types'
 import { sessionRecordingLogic } from 'scenes/session-recordings/sessionRecordingLogic'
-import { eventsListLogicType } from './eventsListLogicType'
+import type { eventsListLogicType } from './eventsListLogicType'
 import { clamp, colonDelimitedDuration, findLastIndex, floorMsToClosestSecond, ceilMsToClosestSecond } from 'lib/utils'
 import { sessionRecordingPlayerLogic } from 'scenes/session-recordings/player/sessionRecordingPlayerLogic'
 import List, { RenderedRows } from 'react-virtualized/dist/es/List'
@@ -14,7 +14,7 @@ export const DEFAULT_SCROLLING_RESET_TIME_INTERVAL = 150 * 5 // https://github.c
 export const eventsListLogic = kea<eventsListLogicType>({
     path: ['scenes', 'session-recordings', 'player', 'eventsListLogic'],
     connect: {
-        logics: [eventUsageLogic],
+        logic: [eventUsageLogic],
         actions: [sessionRecordingLogic, ['setFilters', 'loadEventsSuccess'], sessionRecordingPlayerLogic, ['seek']],
         values: [
             sessionRecordingLogic,

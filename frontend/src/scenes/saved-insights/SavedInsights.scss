@@ -1,21 +1,25 @@
-@import '~/vars';
+@import '../../styles/breakpoints';
 
 .saved-insights {
     height: 100%;
     display: flex;
     flex-direction: column;
 
-    td {
+    > .LemonTable td {
         padding-bottom: 0.75rem !important;
         padding-top: 0.75rem !important;
+        &.icon-column .ant-skeleton-title {
+            height: 2rem;
+            width: 2rem;
+        }
     }
 
     .new-insight-dropdown-btn {
         cursor: pointer;
         height: 40px;
-        background-color: $primary;
+        background-color: var(--primary);
         padding: 8px 12px 8px 16px;
-        border: 1px solid $border;
+        border: 1px solid var(--border);
         border-radius: 4px;
         color: white;
     }
@@ -27,51 +31,15 @@
     }
 
     .star-outlined {
-        color: $border_dark;
+        color: var(--border-dark);
     }
 
     .list-or-card-layout {
-        color: $text_muted_alt;
-        padding: 28px 0;
-        border-top: 1px solid $border;
+        color: var(--text-muted-alt);
+        padding: 1rem 0;
+        border-top: 1px solid var(--border);
         justify-content: space-between;
         align-items: center;
-    }
-
-    .dashboard-item {
-        padding-bottom: 10px;
-        cursor: pointer;
-
-        .dashboard-item-container:not(.funnel) .dashboard-item-content {
-            transform: scale(0.333);
-            transform-origin: top left;
-            overflow: inherit;
-            position: inherit;
-            & > div {
-                height: 300% !important;
-                width: 300% !important;
-            }
-        }
-        .dashboard-item-header {
-            cursor: pointer !important;
-        }
-
-        .svg-funnel-js__label * {
-            font-size: 8px;
-        }
-        &:hover {
-            border-color: var(--primary);
-        }
-    }
-
-    .dashboard-item-footer {
-        bottom: 0;
-        position: absolute;
-        background: #fff;
-        padding: 0.25rem;
-        border-top: 1px solid var(--muted);
-        width: 100%;
-        font-size: 11px;
     }
 
     .saved-insight-empty-state {
@@ -90,7 +58,7 @@
                 line-height: 1em;
                 text-align: center;
                 margin-bottom: 1rem;
-                color: $border;
+                color: var(--border);
             }
 
             .empty-state__title {
@@ -103,7 +71,7 @@
                 font-weight: 500;
                 font-size: 1rem;
                 line-height: 1.7rem;
-                color: $text_muted;
+                color: var(--text-muted);
             }
 
             button.add-insight-button {
@@ -133,5 +101,20 @@
             font-size: 22px;
             margin-left: -2px;
         }
+    }
+}
+
+.saved-insights-grid {
+    position: relative;
+    display: grid;
+    grid-gap: 1rem;
+    @media screen and (min-width: $xl) {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    @media screen and (min-width: $xxl) {
+        grid-template-columns: repeat(3, 1fr);
+    }
+    .loading-overlay {
+        min-height: 30rem;
     }
 }

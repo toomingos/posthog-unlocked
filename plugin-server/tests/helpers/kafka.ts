@@ -1,7 +1,8 @@
-import { Kafka, logLevel } from 'kafkajs'
+import { Consumer, Kafka, logLevel } from 'kafkajs'
 
 import { defaultConfig, overrideWithEnv } from '../../src/config/config'
 import {
+    KAFKA_BUFFER,
     KAFKA_EVENTS,
     KAFKA_EVENTS_PLUGIN_INGESTION,
     KAFKA_GROUPS,
@@ -12,27 +13,23 @@ import {
     KAFKA_SESSION_RECORDING_EVENTS,
 } from '../../src/config/kafka-topics'
 import { PluginsServerConfig } from '../../src/types'
-import { delay, UUIDT } from '../../src/utils/utils'
+import { UUIDT } from '../../src/utils/utils'
 import { KAFKA_EVENTS_DEAD_LETTER_QUEUE } from './../../src/config/kafka-topics'
+import { delayUntilEventIngested } from './clickhouse'
 
-/** Clear the kafka queue */
-export async function resetKafka(extraServerConfig: Partial<PluginsServerConfig>, delayMs = 2000): Promise<true> {
-    console.log('Resetting Kafka!')
+/** Clear the Kafka queue and return Kafka object */
+export async function resetKafka(extraServerConfig?: Partial<PluginsServerConfig>): Promise<Kafka> {
     const config = { ...overrideWithEnv(defaultConfig, process.env), ...extraServerConfig }
     const kafka = new Kafka({
         clientId: `plugin-server-test-${new UUIDT()}`,
         brokers: (config.KAFKA_HOSTS || '').split(','),
         logLevel: logLevel.WARN,
     })
-    const producer = kafka.producer()
-    const consumer = kafka.consumer({
-        groupId: 'clickhouse-ingestion-test',
-    })
-    const messages = []
 
     await createTopics(kafka, [
         KAFKA_EVENTS,
         KAFKA_EVENTS_PLUGIN_INGESTION,
+        KAFKA_BUFFER,
         KAFKA_GROUPS,
         KAFKA_SESSION_RECORDING_EVENTS,
         KAFKA_PERSON,
@@ -42,55 +39,53 @@ export async function resetKafka(extraServerConfig: Partial<PluginsServerConfig>
         KAFKA_EVENTS_DEAD_LETTER_QUEUE,
     ])
 
-    await new Promise<void>(async (resolve, reject) => {
-        console.info('setting group join and crash listeners')
-        const { CONNECT, GROUP_JOIN, CRASH } = consumer.events
-        consumer.on(CONNECT, () => {
-            console.log('consumer connected to kafka')
-        })
-        consumer.on(GROUP_JOIN, () => {
-            console.log('joined group')
-            resolve()
-        })
-        consumer.on(CRASH, ({ payload: { error } }) => reject(error))
-
-        console.info('connecting producer')
-        await producer.connect()
-
-        console.info('subscribing consumer')
-        await consumer.subscribe({ topic: KAFKA_EVENTS_PLUGIN_INGESTION })
-
-        console.info('running consumer')
-        await consumer.run({
-            eachMessage: async (payload) => {
-                await Promise.resolve()
-                console.info('message received!')
-                messages.push(payload)
-            },
-        })
-
-        console.info(`awaiting ${delayMs} ms before disconnecting`)
-        await delay(delayMs)
-
-        console.info('disconnecting producer')
-        await producer.disconnect()
-
-        console.info('stopping consumer')
-        await consumer.stop()
-
-        console.info('disconnecting consumer')
-        await consumer.disconnect()
-    })
-
-    return true
+    return kafka
 }
 
 async function createTopics(kafka: Kafka, topics: string[]) {
     const admin = kafka.admin()
     await admin.connect()
-    await admin.createTopics({
-        waitForLeaders: true,
-        topics: topics.map((topic) => ({ topic })),
-    })
+
+    const existingTopics = await admin.listTopics()
+    const topicsToCreate = topics.filter((topic) => !existingTopics.includes(topic)).map((topic) => ({ topic }))
+
+    if (topicsToCreate.length > 0) {
+        await admin.createTopics({
+            waitForLeaders: true,
+            topics: topicsToCreate,
+        })
+    }
     await admin.disconnect()
+}
+
+export function spyOnKafka(
+    topic: string,
+    serverConfig?: Partial<PluginsServerConfig>
+): (minLength?: number) => Promise<any[]> {
+    let bufferTopicMessages: any[]
+    let bufferConsumer: Consumer
+
+    beforeAll(async () => {
+        const kafka = await resetKafka(serverConfig)
+        bufferConsumer = kafka.consumer({ groupId: 'e2e-buffer-test' })
+        await bufferConsumer.subscribe({ topic })
+        await bufferConsumer.run({
+            eachMessage: ({ message }) => {
+                const messageValueParsed = JSON.parse(message.value!.toString())
+                bufferTopicMessages.push(messageValueParsed)
+                return Promise.resolve() // Not really needed but KafkaJS's typing accepts promises only
+            },
+        })
+    })
+
+    beforeEach(() => {
+        bufferTopicMessages = []
+    })
+
+    afterAll(async () => {
+        await bufferConsumer.stop()
+        await bufferConsumer.disconnect()
+    })
+
+    return async (minLength) => await delayUntilEventIngested(() => bufferTopicMessages, minLength)
 }

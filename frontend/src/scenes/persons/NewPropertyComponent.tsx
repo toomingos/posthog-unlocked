@@ -1,9 +1,8 @@
 import React, { useState } from 'react'
-import { Input, Button, Radio } from 'antd'
-import { useActions } from 'kea'
-import { personsLogic } from './personsLogic'
-import { PlusOutlined, SaveOutlined, StopOutlined, CheckOutlined, CloseOutlined } from '@ant-design/icons'
+import { Input, Radio } from 'antd'
+import { SaveOutlined, StopOutlined, CheckOutlined, CloseOutlined } from '@ant-design/icons'
 import Modal from 'antd/lib/modal/Modal'
+import { LemonButton } from 'lib/components/LemonButton'
 
 interface NewPropertyInterface {
     creating: boolean
@@ -12,10 +11,13 @@ interface NewPropertyInterface {
     value?: string | number | boolean | null
 }
 
-export const NewPropertyComponent = (): JSX.Element => {
+export interface NewPropertyComponentProps {
+    editProperty: (key: string, newValue?: string | number | boolean | null) => void
+}
+
+export function NewPropertyComponent({ editProperty }: NewPropertyComponentProps): JSX.Element {
     const initialState = { creating: false, propertyType: 'string' } as NewPropertyInterface
     const [state, setState] = useState(initialState)
-    const { editProperty } = useActions(personsLogic)
 
     const saveProperty = (): void => {
         if (state.key && state.value !== undefined) {
@@ -28,14 +30,13 @@ export const NewPropertyComponent = (): JSX.Element => {
         <>
             <div className="mb">
                 <div className="text-right">
-                    <Button
+                    <LemonButton
                         data-attr="add-prop-button"
                         onClick={() => setState({ ...state, creating: true })}
                         type="primary"
-                        icon={<PlusOutlined />}
                     >
                         New property
-                    </Button>
+                    </LemonButton>
                 </div>
             </div>
             <Modal

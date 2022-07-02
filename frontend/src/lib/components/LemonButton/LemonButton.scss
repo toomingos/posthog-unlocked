@@ -1,35 +1,100 @@
-@import '~/vars';
-
 .LemonButton {
+    font-weight: 500;
     color: var(--primary);
-    font-weight: 600;
     cursor: pointer;
-    &:not(:disabled):hover {
+    &:not(:disabled):hover,
+    &.LemonButton--active {
         background: var(--primary-bg-hover);
     }
     &:not(:disabled):active {
         background: var(--primary-bg-active);
     }
     &:disabled {
-        opacity: 0.6;
+        opacity: var(--opacity-disabled);
         cursor: not-allowed;
     }
     .LemonRow__icon {
         color: var(--primary);
     }
+    &.LemonRow--status-danger {
+        color: var(--danger);
+    }
+    &.LemonRow--status-warning {
+        color: var(--warning);
+    }
+    &.LemonRow--status-success {
+        color: var(--success);
+    }
+}
+
+.LemonButton--tertiary {
+    color: var(--muted-alt);
+    .LemonRow__icon {
+        color: var(--muted-alt);
+    }
+}
+
+.LemonButton--secondary {
+    border: 1px solid var(--border);
+    background: var(--bg-light);
+    &:not(:disabled):hover,
+    &.LemonButton--active,
+    &:not(:disabled):active {
+        background: var(--bg-light);
+        border-color: currentColor;
+    }
+    &:not(:disabled):active {
+        color: var(--primary-active);
+    }
+    .LemonRow__icon {
+        color: var(--muted-alt);
+    }
 }
 
 .LemonButton--primary {
-    background: $primary;
-    color: #fff;
-    &:not(:disabled):hover {
-        background: $primary_hover;
+    background: var(--primary);
+    color: #fff !important;
+    &:not(:disabled):hover,
+    &.LemonButton--active {
+        background: var(--primary-hover);
     }
     &:not(:disabled):active {
         background: var(--primary-active);
     }
+    &.LemonRow--status-danger {
+        background: var(--danger);
+        &:not(:disabled):hover,
+        &.LemonButton--active {
+            background: var(--danger-hover);
+        }
+        &:not(:disabled):active {
+            background: var(--danger-active);
+        }
+    }
+    &.LemonRow--status-warning {
+        background: var(--warning);
+        &:not(:disabled):hover,
+        &.LemonButton--active {
+            background: var(--warning-hover);
+        }
+        &:not(:disabled):active {
+            background: var(--warning-active);
+        }
+    }
+    &.LemonRow--status-success {
+        background: var(--success);
+        // TODO: Hover/active colors are not defined for success yet
+    }
+    .LemonRow__icon,
+    .spinner {
+        color: #fff !important;
+    }
+}
+
+.LemonButton--alt {
+    color: var(--primary-alt);
     .LemonRow__icon {
-        color: #fff;
+        color: var(--primary-alt);
     }
 }
 
@@ -41,6 +106,11 @@
     }
 }
 
+// Order matters - translucent should be before highlighted, but after all the other types
+.LemonButton--translucent {
+    background: transparent;
+}
+
 .LemonButton--highlighted {
     background: var(--primary-bg-hover);
     color: var(--text-default);
@@ -49,11 +119,22 @@
     }
 }
 
+.LemonRow--outlined.LemonButton {
+    &:not(:disabled):hover,
+    &.LemonButton--active,
+    &:not(:disabled):active {
+        background: inherit;
+        border-color: var(--primary);
+    }
+}
+
 .LemonButtonWithSideAction {
     position: relative;
-    .side-button {
-        position: absolute;
-        top: 0.5rem;
-        right: 0.5rem;
-    }
+}
+
+.LemonButtonWithSideAction--side-button {
+    position: absolute;
+    top: 50%;
+    right: 1.25rem;
+    transform: translate(50%, -50%);
 }

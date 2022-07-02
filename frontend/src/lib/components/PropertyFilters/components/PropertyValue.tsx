@@ -4,14 +4,11 @@ import { useThrottledCallback } from 'use-debounce'
 import api from 'lib/api'
 import { isOperatorDate, isOperatorFlag, isOperatorMulti, isOperatorRegex, toString } from 'lib/utils'
 import { SelectGradientOverflow } from 'lib/components/SelectGradientOverflow'
-import { PropertyOperator } from '~/types'
-import dayjs, { Dayjs } from 'dayjs'
-import generatePicker from 'antd/lib/date-picker/generatePicker'
-import dayjsGenerateConfig from 'rc-picker/es/generate/dayjs'
+import { PropertyOperator, PropertyType } from '~/types'
 import { propertyDefinitionsModel } from '~/models/propertyDefinitionsModel'
 import { useValues } from 'kea'
-
-export const DatePicker = generatePicker<Dayjs>(dayjsGenerateConfig)
+import { PropertyFilterDatePicker } from 'lib/components/PropertyFilters/components/PropertyFilterDatePicker'
+import { DurationPicker } from 'lib/components/DurationPicker/DurationPicker'
 
 type PropValue = {
     id?: number
@@ -25,16 +22,17 @@ type Option = {
     values?: PropValue[]
 }
 
-interface PropertyValueProps {
+export interface PropertyValueProps {
     propertyKey: string
     type: string
     endpoint?: string // Endpoint to fetch options from
     placeholder?: string
+    className?: string
     style?: Partial<React.CSSProperties>
     bordered?: boolean
     onSet: CallableFunction
     value?: string | number | Array<string | number> | null
-    operator?: PropertyOperator
+    operator: PropertyOperator
     outerOptions?: Option[] // If no endpoint provided, options are given here
     autoFocus?: boolean
     allowCustom?: boolean
@@ -51,7 +49,7 @@ function getValidationError(operator: PropertyOperator, value: any): string | nu
     if (isOperatorRegex(operator)) {
         try {
             new RegExp(value)
-        } catch (e) {
+        } catch (e: any) {
             return e.message
         }
     }
@@ -63,6 +61,7 @@ export function PropertyValue({
     type,
     endpoint = undefined,
     placeholder = undefined,
+    className,
     style = {},
     bordered = true,
     onSet,
@@ -72,28 +71,39 @@ export function PropertyValue({
     autoFocus = false,
     allowCustom = true,
 }: PropertyValueProps): JSX.Element {
-    const isMultiSelect = operator && isOperatorMulti(operator)
-    const [input, setInput] = useState(isMultiSelect ? '' : toString(value))
-    const [shouldBlur, setShouldBlur] = useState(false)
+    // what the human has typed into the box
+    const [input, setInput] = useState(Array.isArray(value) ? '' : toString(value) ?? '')
+    // options from the server for search
     const [options, setOptions] = useState({} as Record<string, Option>)
+
+    const [shouldBlur, setShouldBlur] = useState(false)
     const autoCompleteRef = useRef<HTMLElement>(null)
 
-    const { formatForDisplay } = useValues(propertyDefinitionsModel)
+    const { formatForDisplay, describeProperty } = useValues(propertyDefinitionsModel)
+
+    const isMultiSelect = operator && isOperatorMulti(operator)
+    const isDateTimeProperty = operator && isOperatorDate(operator)
+    const isDurationProperty = propertyKey && describeProperty(propertyKey) === PropertyType.Duration
 
     // update the input field if passed a new `value` prop
     useEffect(() => {
-        if (!value) {
+        if (value == null) {
             setInput('')
-        } else if (value !== input) {
+        } else if (!Array.isArray(value) && toString(value) !== input) {
             const valueObject = options[propertyKey]?.values?.find((v) => v.id === value)
             if (valueObject) {
                 setInput(toString(valueObject.name))
+            } else {
+                setInput(toString(value))
             }
         }
     }, [value])
 
     const loadPropertyValues = useThrottledCallback((newInput) => {
-        if (type === 'cohort') {
+        if (['cohort', 'session'].includes(type)) {
+            return
+        }
+        if (!propertyKey) {
             return
         }
         const key = propertyKey.split('__')[0]
@@ -146,6 +156,7 @@ export function PropertyValue({
     const validationError = operator ? getValidationError(operator, value) : null
 
     const commonInputProps = {
+        className,
         style: { width: '100%', ...style },
         onSearch: (newInput: string) => {
             setInput(newInput)
@@ -185,11 +196,6 @@ export function PropertyValue({
             }
         },
     }
-
-    const dayJSMightParse = (
-        candidateDateTimeValue: string | number | (string | number)[] | null | undefined
-    ): candidateDateTimeValue is string | number | undefined =>
-        ['string', 'number'].includes(typeof candidateDateTimeValue)
 
     return (
         <>
@@ -232,26 +238,21 @@ export function PropertyValue({
                         )
                     })}
                 </SelectGradientOverflow>
-            ) : operator && isOperatorDate(operator) ? (
-                <>
-                    <DatePicker
-                        {...commonInputProps}
-                        inputReadOnly={true}
-                        className={'filter-date-picker'}
-                        dropdownClassName={'filter-date-picker-dropdown'}
-                        format="YYYY-MM-DD HH:mm:ss"
-                        showTime={true}
-                        showNow={false}
-                        value={dayJSMightParse(value) ? dayjs(value) : null}
-                        onOk={(selectedDate) => {
-                            setValue(selectedDate.format('YYYY-MM-DD HH:MM:ss'))
-                        }}
-                        getPopupContainer={(trigger: Element | null) => {
-                            const container = trigger?.parentElement?.parentElement?.parentElement
-                            return container ?? document.body
-                        }}
-                    />
-                </>
+            ) : isDateTimeProperty ? (
+                <PropertyFilterDatePicker
+                    autoFocus={autoFocus}
+                    operator={operator}
+                    value={value}
+                    setValue={setValue}
+                    style={commonInputProps.style}
+                />
+            ) : isDurationProperty ? (
+                <DurationPicker
+                    style={commonInputProps.style}
+                    autoFocus={autoFocus}
+                    initialValue={value as number}
+                    onChange={setValue}
+                />
             ) : (
                 <AutoComplete
                     {...commonInputProps}

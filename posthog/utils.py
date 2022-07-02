@@ -13,8 +13,8 @@ import sys
 import time
 import uuid
 from enum import Enum
-from itertools import count
 from typing import (
+    TYPE_CHECKING,
     Any,
     Dict,
     Generator,
@@ -30,21 +30,26 @@ from urllib.parse import urljoin, urlparse
 
 import lzstring
 import pytz
+from celery.schedules import crontab
 from dateutil import parser
 from dateutil.relativedelta import relativedelta
 from django.conf import settings
 from django.core.cache import cache
-from django.db.models.query import QuerySet
 from django.db.utils import DatabaseError
 from django.http import HttpRequest, HttpResponse
 from django.template.loader import get_template
 from django.utils import timezone
 from rest_framework.request import Request
 from sentry_sdk import configure_scope
+from sentry_sdk.api import capture_exception
 
-from posthog.constants import AnalyticsDBMS, AvailableFeature
+from posthog.constants import AvailableFeature
 from posthog.exceptions import RequestParsingError
 from posthog.redis import get_client
+
+if TYPE_CHECKING:
+    from django.contrib.auth.models import AbstractBaseUser, AnonymousUser
+
 
 DATERANGE_MAP = {
     "minute": datetime.timedelta(minutes=1),
@@ -211,6 +216,16 @@ def get_git_commit() -> Optional[str]:
         return None
 
 
+def get_js_url(request: HttpRequest) -> str:
+    """
+    As the web app may be loaded from a non-localhost url (e.g. from the worker container calling the web container)
+    it is necessary to set the JS_URL host based on the calling origin
+    """
+    if settings.DEBUG and settings.JS_URL == "http://localhost:8234":
+        return f"http://{request.get_host().split(':')[0]}:8234"
+    return settings.JS_URL
+
+
 def render_template(template_name: str, request: HttpRequest, context: Dict = {}) -> HttpResponse:
     from loginas.utils import is_impersonated_session
 
@@ -241,7 +256,7 @@ def render_template(template_name: str, request: HttpRequest, context: Dict = {}
         context["js_posthog_host"] = "'https://app.posthog.com'"
 
     context["js_capture_internal_metrics"] = settings.CAPTURE_INTERNAL_METRICS
-    context["js_url"] = settings.JS_URL
+    context["js_url"] = get_js_url(request)
 
     posthog_app_context: Dict[str, Any] = {
         "persisted_feature_flags": settings.PERSISTED_FEATURE_FLAGS,
@@ -259,6 +274,7 @@ def render_template(template_name: str, request: HttpRequest, context: Dict = {}
             "current_team": None,
             "preflight": json.loads(preflight_check(request).getvalue()),
             "default_event_name": get_default_event_name(),
+            "switched_team": getattr(request, "switched_team", None),
             **posthog_app_context,
         }
 
@@ -269,6 +285,7 @@ def render_template(template_name: str, request: HttpRequest, context: Dict = {}
             if team:
                 team_serialized = TeamSerializer(team, context={"request": request}, many=False)
                 posthog_app_context["current_team"] = team_serialized.data
+                posthog_app_context["frontend_apps"] = get_frontend_apps(team.pk)
 
     context["posthog_app_context"] = json.dumps(posthog_app_context, default=json_uuid_convert)
 
@@ -276,15 +293,18 @@ def render_template(template_name: str, request: HttpRequest, context: Dict = {}
     return HttpResponse(html)
 
 
-def get_self_capture_api_token(request: HttpRequest) -> Optional[str]:
+def get_self_capture_api_token(request: Optional[HttpRequest]) -> Optional[str]:
     from posthog.models import Team
 
     # Get the current user's team (or first team in the instance) to set self capture configs
     team: Optional[Team] = None
-    try:
+    if request and getattr(request, "user", None) and getattr(request.user, "team", None):
         team = request.user.team  # type: ignore
-    except (Team.DoesNotExist, AttributeError):
-        team = Team.objects.only("api_token").first()
+    else:
+        try:
+            team = Team.objects.only("api_token").first()
+        except Exception:
+            pass
 
     if team:
         return team.api_token
@@ -299,6 +319,36 @@ def get_default_event_name():
     elif EventDefinition.objects.filter(name="$screen").exists():
         return "$screen"
     return "$pageview"
+
+
+def get_frontend_apps(team_id: int) -> Dict[int, Dict[str, Any]]:
+    from posthog.models import Plugin, PluginSourceFile
+
+    plugin_configs = (
+        Plugin.objects.filter(pluginconfig__team_id=team_id, pluginconfig__enabled=True)
+        .filter(pluginsourcefile__status=PluginSourceFile.Status.TRANSPILED, pluginsourcefile__filename="frontend.tsx")
+        .values("pluginconfig__id", "pluginconfig__config", "config_schema", "id", "plugin_type", "name")
+        .all()
+    )
+
+    frontend_apps = {}
+    for p in plugin_configs:
+        config = p["pluginconfig__config"] or {}
+        config_schema = p["config_schema"] or {}
+        secret_fields = set([field["key"] for field in config_schema if "secret" in field and field["secret"]])
+        for key in secret_fields:
+            if key in config:
+                config[key] = "** SECRET FIELD **"
+        frontend_apps[p["pluginconfig__id"]] = {
+            "pluginConfigId": p["pluginconfig__id"],
+            "pluginId": p["id"],
+            "pluginType": p["plugin_type"],
+            "name": p["name"],
+            "url": f"/app/{p['pluginconfig__id']}/",
+            "config": config,
+        }
+
+    return frontend_apps
 
 
 def json_uuid_convert(o):
@@ -316,28 +366,6 @@ def friendly_time(seconds: float):
     ).strip()
 
 
-def append_data(dates_filled: List, interval=None, math="sum") -> Dict[str, Any]:
-    append: Dict[str, Any] = {}
-    append["data"] = []
-    append["labels"] = []
-    append["days"] = []
-
-    days_format = "%Y-%m-%d"
-
-    if interval == "hour":
-        days_format += " %H:%M:%S"
-
-    for item in dates_filled:
-        date = item[0]
-        value = item[1]
-        append["days"].append(date.strftime(days_format))
-        append["labels"].append(format_label_date(date, interval))
-        append["data"].append(value)
-    if math == "sum":
-        append["count"] = sum(append["data"])
-    return append
-
-
 def get_ip_address(request: HttpRequest) -> str:
     """use requestobject to fetch client machine's IP Address"""
     x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
@@ -345,6 +373,11 @@ def get_ip_address(request: HttpRequest) -> str:
         ip = x_forwarded_for.split(",")[0]
     else:
         ip = request.META.get("REMOTE_ADDR")  # Real IP address of client Machine
+
+    # Strip port from ip address as Azure gateway handles x-forwarded-for incorrectly
+    if ip and len(ip.split(":")) == 2:
+        ip = ip.split(":")[0]
+
     return ip
 
 
@@ -353,7 +386,7 @@ def dict_from_cursor_fetchall(cursor):
     return [dict(zip(columns, row)) for row in cursor.fetchall()]
 
 
-def convert_property_value(input: Union[str, bool, dict, list, int]) -> str:
+def convert_property_value(input: Union[str, bool, dict, list, int, Optional[str]]) -> str:
     if isinstance(input, bool):
         if input is True:
             return "true"
@@ -379,7 +412,15 @@ def cors_response(request, response):
     response["Access-Control-Allow-Origin"] = f"{url.scheme}://{url.netloc}"
     response["Access-Control-Allow-Credentials"] = "true"
     response["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
-    response["Access-Control-Allow-Headers"] = "X-Requested-With"
+
+    # Handle headers that sentry randomly sends for every request.
+    #  Would cause a CORS failure otherwise.
+    allow_headers = request.META.get("HTTP_ACCESS_CONTROL_REQUEST_HEADERS", "").split(",")
+    allow_headers = [header for header in allow_headers if header in ["traceparent", "request-id"]]
+
+    response["Access-Control-Allow-Headers"] = "X-Requested-With" + (
+        "," + ",".join(allow_headers) if len(allow_headers) > 0 else ""
+    )
     return response
 
 
@@ -408,30 +449,9 @@ def base64_decode(data):
     return data.decode("utf8", "surrogatepass").encode("utf-16", "surrogatepass")
 
 
-# Used by non-DRF endpoins from capture.py and decide.py (/decide, /batch, /capture, etc)
-def load_data_from_request(request):
-    data = None
-    if request.method == "POST":
-        if request.content_type in ["", "text/plain", "application/json"]:
-            data = request.body
-        else:
-            data = request.POST.get("data")
-    else:
-        data = request.GET.get("data")
-
+def decompress(data: Any, compression: str):
     if not data:
         return None
-
-    # add the data in sentry's scope in case there's an exception
-    with configure_scope() as scope:
-        scope.set_context("data", data)
-        scope.set_tag("origin", request.META.get("REMOTE_HOST", "unknown"))
-        scope.set_tag("referer", request.META.get("HTTP_REFERER", "unknown"))
-
-    compression = (
-        request.GET.get("compression") or request.POST.get("compression") or request.headers.get("content-encoding", "")
-    )
-    compression = compression.lower()
 
     if compression == "gzip" or compression == "gzip-js":
         if data == b"undefined":
@@ -471,10 +491,42 @@ def load_data_from_request(request):
         # but we just want it to return None
         data = json.loads(data, parse_constant=lambda x: None)
     except (json.JSONDecodeError, UnicodeDecodeError) as error_main:
-        raise RequestParsingError("Invalid JSON: %s" % (str(error_main)))
+        if compression == "":
+            try:
+                return decompress(data, "gzip")
+            except Exception as inner:
+                # re-trying with compression set didn't succeed, throw original error
+                raise RequestParsingError("Invalid JSON: %s" % (str(error_main))) from inner
+        else:
+            raise RequestParsingError("Invalid JSON: %s" % (str(error_main)))
 
     # TODO: data can also be an array, function assumes it's either None or a dictionary.
     return data
+
+
+# Used by non-DRF endpoints from capture.py and decide.py (/decide, /batch, /capture, etc)
+def load_data_from_request(request):
+    if request.method == "POST":
+        if request.content_type in ["", "text/plain", "application/json"]:
+            data = request.body
+        else:
+            data = request.POST.get("data")
+    else:
+        data = request.GET.get("data")
+
+    # add the data in sentry's scope in case there's an exception
+    with configure_scope() as scope:
+        scope.set_context("data", data)
+        scope.set_tag("origin", request.headers.get("origin", request.headers.get("remote_host", "unknown")))
+        scope.set_tag("referer", request.headers.get("referer", "unknown"))
+        # since version 1.20.0 posthog-js adds its version to the `ver` query parameter as a debug signal here
+        scope.set_tag("library.version", request.GET.get("ver", "unknown"))
+
+    compression = (
+        request.GET.get("compression") or request.POST.get("compression") or request.headers.get("content-encoding", "")
+    ).lower()
+
+    return decompress(data, compression)
 
 
 class SingletonDecorator:
@@ -577,6 +629,18 @@ def get_plugin_server_job_queues() -> Optional[List[str]]:
     return None
 
 
+def is_object_storage_available() -> bool:
+    from posthog.storage import object_storage
+
+    try:
+        if settings.OBJECT_STORAGE_ENABLED:
+            return object_storage.health_check()
+        else:
+            return False
+    except BaseException:
+        return False
+
+
 def get_redis_info() -> Mapping[str, Any]:
     return get_client().info()
 
@@ -585,36 +649,21 @@ def get_redis_queue_depth() -> int:
     return get_client().llen("celery")
 
 
-def queryset_to_named_query(qs: QuerySet, prepend: str = "") -> Tuple[str, dict]:
-    raw, params = qs.query.sql_with_params()
-    arg_count = 0
-    counter = count(arg_count)
-    new_string = re.sub(r"%s", lambda _: f"%({prepend}_arg_{str(next(counter))})s", raw)
-    named_params = {}
-    for idx, param in enumerate(params):
-        named_params.update({f"{prepend}_arg_{idx}": param})
-    return new_string, named_params
-
-
-def is_clickhouse_enabled() -> bool:
-    return settings.EE_AVAILABLE and settings.PRIMARY_DB == AnalyticsDBMS.CLICKHOUSE
-
-
 def get_instance_realm() -> str:
     """
-    Returns the realm for the current instance. `cloud` or 'demo' or `hosted` or `hosted-clickhouse`.
+    Returns the realm for the current instance. `cloud` or 'demo' or `hosted-clickhouse`.
+
+    Historically this would also have returned `hosted` for hosted postgresql based installations
     """
     if settings.MULTI_TENANCY:
         return "cloud"
     elif settings.DEMO:
         return "demo"
-    elif is_clickhouse_enabled():
-        return "hosted-clickhouse"
     else:
-        return "hosted"
+        return "hosted-clickhouse"
 
 
-def get_can_create_org() -> bool:
+def get_can_create_org(user: Union["AbstractBaseUser", "AnonymousUser"]) -> bool:
     """Returns whether a new organization can be created in the current instance.
 
     Organizations can be created only in the following cases:
@@ -626,10 +675,10 @@ def get_can_create_org() -> bool:
     from posthog.models.organization import Organization
 
     if (
-        settings.MULTI_TENANCY
-        or settings.DEMO
+        settings.MULTI_TENANCY  # There's no limit of organizations on Cloud
+        or (settings.DEMO and user.is_anonymous)  # Demo users can have a single demo org, but not more
         or settings.E2E_TESTING
-        or not Organization.objects.filter(for_internal_metrics=False).exists()
+        or not Organization.objects.filter(for_internal_metrics=False).exists()  # Definitely can create an org if zero
     ):
         return True
 
@@ -648,12 +697,16 @@ def get_can_create_org() -> bool:
     return False
 
 
-def get_available_social_auth_providers() -> Dict[str, bool]:
+def get_instance_available_sso_providers() -> Dict[str, bool]:
+    """
+    Returns a dictionary containing final determination to which SSO providers are available.
+    SAML is not included in this method as it can only be configured domain-based and not instance-based (see `OrganizationDomain` for details)
+    Validates configuration settings and license validity (if applicable).
+    """
     output: Dict[str, bool] = {
         "github": bool(settings.SOCIAL_AUTH_GITHUB_KEY and settings.SOCIAL_AUTH_GITHUB_SECRET),
         "gitlab": bool(settings.SOCIAL_AUTH_GITLAB_KEY and settings.SOCIAL_AUTH_GITLAB_SECRET),
         "google-oauth2": False,
-        "saml": False,
     }
 
     # Get license information
@@ -674,17 +727,11 @@ def get_available_social_auth_providers() -> Dict[str, bool]:
         else:
             print_warning(["You have Google login set up, but not the required license!"])
 
-    if getattr(settings, "SAML_CONFIGURED", None):
-        if bypass_license or (license is not None and AvailableFeature.SAML in license.available_features):
-            output["saml"] = True
-        else:
-            print_warning(["You have SAML set up, but not the required license!"])
-
     return output
 
 
-def flatten(l: Union[List, Tuple]) -> Generator:
-    for el in l:
+def flatten(i: Union[List, Tuple]) -> Generator:
+    for el in i:
         if isinstance(el, list):
             yield from flatten(el)
         else:
@@ -808,10 +855,10 @@ def get_available_timezones_with_offsets() -> Dict[str, float]:
 
 
 def should_refresh(request: Request) -> bool:
-    key = "refresh"
-    return (request.query_params.get(key, "") or request.GET.get(key, "")).lower() == "true" or request.data.get(
-        key, False
-    ) == True
+    query_param = request.query_params.get("refresh")
+    data_value = request.data.get("refresh")
+
+    return (query_param is not None and (query_param == "" or query_param.lower() == "true")) or data_value is True
 
 
 def str_to_bool(value: Any) -> bool:
@@ -847,7 +894,7 @@ def format_query_params_absolute_url(
     OFFSET_REGEX = re.compile(fr"([&?]{offset_alias}=)(\d+)")
     LIMIT_REGEX = re.compile(fr"([&?]{limit_alias}=)(\d+)")
 
-    url_to_format = request.get_raw_uri()
+    url_to_format = request.build_absolute_uri()
 
     if not url_to_format:
         return None
@@ -887,10 +934,55 @@ class DataclassJSONEncoder(json.JSONEncoder):
         return super().default(o)
 
 
-def encode_value_as_param(value: Union[str, list, dict]) -> str:
+def encode_value_as_param(value: Union[str, list, dict, datetime.datetime]) -> str:
     if isinstance(value, (list, dict, tuple)):
         return json.dumps(value, cls=DataclassJSONEncoder)
     elif isinstance(value, Enum):
         return value.value
+    elif isinstance(value, datetime.datetime):
+        return value.isoformat()
     else:
         return value
+
+
+def is_json(val):
+    if isinstance(val, int):
+        return False
+
+    try:
+        int(val)
+        return False
+    except:
+        pass
+    try:
+        json.loads(val)
+    except (ValueError, TypeError):
+        return False
+    return True
+
+
+def cast_timestamp_or_now(timestamp: Optional[Union[timezone.datetime, str]]) -> str:
+    if not timestamp:
+        timestamp = timezone.now()
+
+    # clickhouse specific formatting
+    if isinstance(timestamp, str):
+        timestamp = parser.isoparse(timestamp)
+    else:
+        timestamp = timestamp.astimezone(pytz.utc)
+
+    return timestamp.strftime("%Y-%m-%d %H:%M:%S.%f")
+
+
+def get_crontab(schedule: Optional[str]) -> Optional[crontab]:
+    if schedule is None or schedule == "":
+        return None
+
+    try:
+        minute, hour, day_of_month, month_of_year, day_of_week = schedule.strip().split(" ")
+        return crontab(
+            minute=minute, hour=hour, day_of_month=day_of_month, month_of_year=month_of_year, day_of_week=day_of_week,
+        )
+    except Exception as err:
+        capture_exception(err)
+        return None

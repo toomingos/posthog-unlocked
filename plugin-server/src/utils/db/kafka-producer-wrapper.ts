@@ -1,5 +1,6 @@
+import * as Sentry from '@sentry/node'
 import { StatsD } from 'hot-shots'
-import { Producer, ProducerRecord } from 'kafkajs'
+import { Message, Producer, ProducerRecord } from 'kafkajs'
 
 import { PluginsServerConfig } from '../../types'
 import { instrumentQuery } from '../metrics'
@@ -17,9 +18,9 @@ import { timeoutGuard } from './utils'
  */
 export class KafkaProducerWrapper {
     /** Kafka producer used for syncing Postgres and ClickHouse person data. */
-    producer: Producer
+    private producer: Producer
     /** StatsD instance used to do instrumentation */
-    statsd: StatsD | undefined
+    private statsd: StatsD | undefined
 
     lastFlushTime: number
     currentBatch: Array<ProducerRecord>
@@ -69,6 +70,13 @@ export class KafkaProducerWrapper {
         }
     }
 
+    async queueSingleJsonMessage(topic: string, key: Message['key'], object: Record<string, any>): Promise<void> {
+        await this.queueMessage({
+            topic,
+            messages: [{ key, value: Buffer.from(JSON.stringify(object)) }],
+        })
+    }
+
     public flush(append?: ProducerRecord): Promise<void> {
         if (this.currentBatch.length === 0) {
             return Promise.resolve()
@@ -86,6 +94,7 @@ export class KafkaProducerWrapper {
                     topicMessages: messages,
                 })
             } catch (err) {
+                Sentry.captureException(err)
                 // :TODO: Implement some retrying, https://github.com/PostHog/plugin-server/issues/511
                 this.statsd?.increment('query.kafka_send.failure')
                 throw err
@@ -93,6 +102,12 @@ export class KafkaProducerWrapper {
                 clearTimeout(timeout)
             }
         })
+    }
+
+    public async disconnect(): Promise<void> {
+        clearInterval(this.flushInterval)
+        await this.flush()
+        await this.producer.disconnect()
     }
 
     private getMessageSize(kafkaMessage: ProducerRecord): number {

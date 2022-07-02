@@ -1,18 +1,30 @@
 import { kea } from 'kea'
 import api from 'lib/api'
-import { PropertyDefinition, PropertyFilterValue, SelectOption } from '~/types'
-import { propertyDefinitionsModelType } from './propertyDefinitionsModelType'
-import dayjs from 'dayjs'
+import { PropertyDefinition, PropertyFilterValue, PropertyType, SelectOption } from '~/types'
+import type { propertyDefinitionsModelType } from './propertyDefinitionsModelType'
+import { dayjs } from 'lib/dayjs'
+import { TaxonomicFilterValue } from 'lib/components/TaxonomicFilter/types'
 
-interface PropertySelectOption extends SelectOption {
+export interface PropertySelectOption extends SelectOption {
     is_numerical?: boolean
 }
 
-interface PropertyDefinitionStorage {
+export interface PropertyDefinitionStorage {
     count: number
     next: null | string
     results: PropertyDefinition[]
 }
+
+const localPropertyDefinitions: PropertyDefinition[] = [
+    {
+        id: '$session_duration',
+        name: '$session_duration',
+        description: 'Duration of the session',
+        is_numerical: true,
+        is_event_property: false,
+        property_type: PropertyType.Duration,
+    },
+]
 
 const normaliseToArray = (
     valueToFormat: Exclude<PropertyFilterValue, null>
@@ -27,14 +39,12 @@ const normaliseToArray = (
     }
 }
 
-type FormatForDisplayFunction = (
+export type FormatForDisplayFunction = (
     propertyName: string | undefined,
     valueToFormat: PropertyFilterValue | undefined
 ) => string | string[] | null
 
-export const propertyDefinitionsModel = kea<
-    propertyDefinitionsModelType<FormatForDisplayFunction, PropertyDefinitionStorage, PropertySelectOption>
->({
+export const propertyDefinitionsModel = kea<propertyDefinitionsModelType>({
     path: ['models', 'propertyDefinitionsModel'],
     actions: () => ({
         loadPropertyDefinitions: (initial = false) => ({ initial }),
@@ -94,7 +104,8 @@ export const propertyDefinitionsModel = kea<
         ],
         propertyDefinitions: [
             (s) => [s.propertyStorage],
-            (propertyStorage): PropertyDefinition[] => propertyStorage.results || [],
+            (propertyStorage): PropertyDefinition[] =>
+                propertyStorage.results ? [...localPropertyDefinitions, ...propertyStorage.results] : [],
         ],
         transformedPropertyDefinitions: [
             // Transformed propertyDefinitions to use in `Select` components
@@ -117,14 +128,11 @@ export const propertyDefinitionsModel = kea<
         ],
         describeProperty: [
             (s) => [s.propertyDefinitions],
-            (propertyDefinitions: PropertyDefinition[]): ((s: string) => string | null) =>
-                (propertyName: string) => {
+            (propertyDefinitions: PropertyDefinition[]): ((s: TaxonomicFilterValue) => string | null) =>
+                (propertyName: TaxonomicFilterValue) => {
+                    // if the model hasn't already cached this definition, will fall back to original display type
                     const match = propertyDefinitions.find((pd) => pd.name === propertyName)
-                    if (match?.property_type) {
-                        const formatDescription = match?.property_type_format ? ` (${match.property_type_format})` : ''
-                        return `${match.property_type}${formatDescription}`
-                    }
-                    return null
+                    return match?.property_type ?? null
                 },
         ],
         formatForDisplay: [
@@ -152,10 +160,10 @@ export const propertyDefinitionsModel = kea<
                             // depending on if they're in seconds or milliseconds
                             if (propertyValue?.match(unixTimestampSeconds)) {
                                 const numericalTimestamp = Number.parseFloat(propertyValue)
-                                return dayjs.unix(numericalTimestamp).format('YYYY-MM-DD hh:mm:ss')
+                                return dayjs.unix(numericalTimestamp).tz().format('YYYY-MM-DD hh:mm:ss')
                             } else if (propertyValue?.match(unixTimestampMilliseconds)) {
                                 const numericalTimestamp = Number.parseInt(propertyValue)
-                                return dayjs(numericalTimestamp).format('YYYY-MM-DD hh:mm:ss')
+                                return dayjs(numericalTimestamp).tz().format('YYYY-MM-DD hh:mm:ss')
                             }
                         }
 

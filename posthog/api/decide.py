@@ -3,7 +3,6 @@ import secrets
 from typing import Any, Dict, Optional, Tuple
 from urllib.parse import urlparse
 
-from django.conf import settings
 from django.http import HttpRequest, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework import status
@@ -14,29 +13,36 @@ from posthog.api.utils import get_token
 from posthog.exceptions import RequestParsingError, generate_exception_response
 from posthog.models import Team, User
 from posthog.models.feature_flag import get_overridden_feature_flags
-from posthog.utils import cors_response, load_data_from_request
+from posthog.utils import cors_response, get_js_url, load_data_from_request
 
 from .utils import get_project_id
 
 
 def on_permitted_domain(team: Team, request: HttpRequest) -> bool:
+    origin = parse_domain(request.headers.get("Origin"))
+    referer = parse_domain(request.headers.get("Referer"))
+    return hostname_in_app_urls(team, origin) or hostname_in_app_urls(team, referer)
+
+
+def hostname_in_app_urls(team: Team, hostname: Optional[str]) -> bool:
+    if not hostname:
+        return False
+
     permitted_domains = ["127.0.0.1", "localhost"]
 
     for url in team.app_urls:
-        hostname = parse_domain(url)
-        if hostname:
-            permitted_domains.append(hostname)
+        host = parse_domain(url)
+        if host:
+            permitted_domains.append(host)
 
-    origin = parse_domain(request.headers.get("Origin"))
-    referer = parse_domain(request.headers.get("Referer"))
     for permitted_domain in permitted_domains:
         if "*" in permitted_domain:
-            pattern = "^{}$".format(permitted_domain.replace(".", "\\.").replace("*", "(.*)"))
-            if (origin and re.search(pattern, origin)) or (referer and re.search(pattern, referer)):
+            pattern = "^{}$".format(re.escape(permitted_domain).replace("\\*", "(.*)"))
+            if re.search(pattern, hostname):
                 return True
-        else:
-            if permitted_domain == origin or permitted_domain == referer:
-                return True
+        elif permitted_domain == hostname:
+            return True
+
     return False
 
 
@@ -52,8 +58,8 @@ def decide_editor_params(request: HttpRequest) -> Tuple[Dict[str, Any], bool]:
         if request.user.toolbar_mode != "disabled":
             editor_params["toolbarVersion"] = "toolbar"
 
-        if settings.JS_URL:
-            editor_params["jsURL"] = settings.JS_URL
+        if get_js_url(request):
+            editor_params["jsURL"] = get_js_url(request)
 
         response["editorParams"] = editor_params
         return response, not request.user.temporary_token
@@ -67,17 +73,16 @@ def parse_domain(url: Any) -> Optional[str]:
 
 @csrf_exempt
 def get_decide(request: HttpRequest):
+    # handle cors request
+    if request.method == "OPTIONS":
+        return cors_response(request, JsonResponse({"status": 1}))
+
     response = {
         "config": {"enable_collect_everything": True},
         "editorParams": {},
         "isAuthenticated": False,
         "supportedCompression": ["gzip", "gzip-js", "lz64"],
     }
-
-    if request.COOKIES.get(settings.TOOLBAR_COOKIE_NAME) and request.user.is_authenticated:
-        response["isAuthenticated"] = True
-        if settings.JS_URL and request.user.toolbar_mode == User.TOOLBAR:
-            response["editorParams"] = {"jsURL": settings.JS_URL, "toolbarVersion": "toolbar"}
 
     if request.user.is_authenticated:
         r, update_user_token = decide_editor_params(request)
@@ -95,7 +100,18 @@ def get_decide(request: HttpRequest):
             api_version_string = request.GET.get("v")
             # NOTE: This does not support semantic versioning e.g. 2.1.0
             api_version = int(api_version_string) if api_version_string else 1
-        except (RequestParsingError, ValueError) as error:
+        except ValueError:
+            # default value added because of bug in posthog-js 1.19.0
+            # see https://sentry.io/organizations/posthog2/issues/2738865125/?project=1899813
+            # as a tombstone if the below statsd counter hasn't seen errors for N days
+            # then it is likely that no clients are running posthog-js 1.19.0
+            # and this defaulting could be removed
+            statsd.incr(
+                f"posthog_cloud_decide_defaulted_api_version_on_value_error",
+                tags={"endpoint": "decide", "api_version_string": api_version_string},
+            )
+            api_version = 2
+        except RequestParsingError as error:
             capture_exception(error)  # We still capture this on Sentry to identify actual potential bugs
             return cors_response(
                 request,
@@ -134,7 +150,9 @@ def get_decide(request: HttpRequest):
             team = user.teams.get(id=project_id)
 
         if team:
-            feature_flags = get_overridden_feature_flags(team, data["distinct_id"], data.get("groups", {}))
+            feature_flags = get_overridden_feature_flags(
+                team.pk, data["distinct_id"], data.get("groups", {}), hash_key_override=data.get("$anon_distinct_id")
+            )
             response["featureFlags"] = feature_flags if api_version >= 2 else list(feature_flags.keys())
 
             if team.session_recording_opt_in and (on_permitted_domain(team, request) or len(team.app_urls) == 0):

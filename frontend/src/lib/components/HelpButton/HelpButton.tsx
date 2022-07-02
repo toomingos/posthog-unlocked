@@ -3,17 +3,21 @@ import './HelpButton.scss'
 import { kea, useActions, useValues } from 'kea'
 import { eventUsageLogic } from 'lib/utils/eventUsageLogic'
 import { HelpType } from '~/types'
-import { helpButtonLogicType } from './HelpButtonType'
+import type { helpButtonLogicType } from './HelpButtonType'
 import { Popup } from '../Popup/Popup'
-import { Placement } from '@popperjs/core'
 import { LemonButton } from '../LemonButton'
 import { IconArrowDropDown, IconArticle, IconGithub, IconHelpOutline, IconMail, IconQuestionAnswer } from '../icons'
 import clsx from 'clsx'
+import { Placement } from '@floating-ui/react-dom-interactions'
 
 const HELP_UTM_TAGS = '?utm_medium=in-product&utm_campaign=help-button-top'
 
 export const helpButtonLogic = kea<helpButtonLogicType>({
-    path: ['lib', 'components', 'HelpButton', 'HelpButton'],
+    props: {} as {
+        key?: string
+    },
+    key: (props: { key?: string }) => props.key || 'global',
+    path: (key) => ['lib', 'components', 'HelpButton', key],
     connect: {
         actions: [eventUsageLogic, ['reportHelpButtonViewed']],
     },
@@ -47,19 +51,29 @@ export const helpButtonLogic = kea<helpButtonLogicType>({
 export interface HelpButtonProps {
     placement?: Placement
     customComponent?: JSX.Element
-    inline?: boolean // Whether the component should be an inline element as opposed to a block element
+    customKey?: string
+    /** Whether the component should be an inline element as opposed to a block element. */
+    inline?: boolean
+    /** Whether only options abount contact with PostHog should be shown (e.g. leaving docs out). */
+    contactOnly?: boolean
 }
 
-export function HelpButton({ placement, customComponent, inline }: HelpButtonProps): JSX.Element {
+export function HelpButton({
+    placement,
+    customComponent,
+    customKey,
+    inline = false,
+    contactOnly = false,
+}: HelpButtonProps): JSX.Element {
     const { reportHelpButtonUsed } = useActions(eventUsageLogic)
-    const { isHelpVisible } = useValues(helpButtonLogic)
-    const { toggleHelp, hideHelp } = useActions(helpButtonLogic)
+    const { isHelpVisible } = useValues(helpButtonLogic({ key: customKey }))
+    const { toggleHelp, hideHelp } = useActions(helpButtonLogic({ key: customKey }))
 
     return (
         <Popup
             overlay={
                 <>
-                    <a href={`https://posthog.com/slack${HELP_UTM_TAGS}`} rel="noopener" target="_blank">
+                    <a href={`https://posthog.com/questions${HELP_UTM_TAGS}`} rel="noopener" target="_blank">
                         <LemonButton
                             icon={<IconQuestionAnswer />}
                             type="stealth"
@@ -69,7 +83,7 @@ export function HelpButton({ placement, customComponent, inline }: HelpButtonPro
                                 hideHelp()
                             }}
                         >
-                            Message us on Slack
+                            Ask us a question
                         </LemonButton>
                     </a>
                     <a href="https://github.com/PostHog/posthog/issues/new/choose" rel="noopener" target="_blank">
@@ -98,19 +112,21 @@ export function HelpButton({ placement, customComponent, inline }: HelpButtonPro
                             Send us an email
                         </LemonButton>
                     </a>
-                    <a href={`https://posthog.com/docs${HELP_UTM_TAGS}`} rel="noopener" target="_blank">
-                        <LemonButton
-                            icon={<IconArticle />}
-                            type="stealth"
-                            fullWidth
-                            onClick={() => {
-                                reportHelpButtonUsed(HelpType.Docs)
-                                hideHelp()
-                            }}
-                        >
-                            Read the docs
-                        </LemonButton>
-                    </a>
+                    {!contactOnly && (
+                        <a href={`https://posthog.com/docs${HELP_UTM_TAGS}`} rel="noopener" target="_blank">
+                            <LemonButton
+                                icon={<IconArticle />}
+                                type="stealth"
+                                fullWidth
+                                onClick={() => {
+                                    reportHelpButtonUsed(HelpType.Docs)
+                                    hideHelp()
+                                }}
+                            >
+                                Read the docs
+                            </LemonButton>
+                        </a>
+                    )}
                 </>
             }
             onClickOutside={hideHelp}

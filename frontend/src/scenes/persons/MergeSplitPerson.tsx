@@ -7,6 +7,7 @@ import { ActivityType, mergeSplitPersonLogic } from './mergeSplitPersonLogic'
 import { capitalizeFirstLetter, midEllipsis, pluralize } from 'lib/utils'
 import { InlineMessage } from 'lib/components/InlineMessage/InlineMessage'
 import { Tooltip } from 'lib/components/Tooltip'
+import { LemonSelectMultiple } from 'lib/components/LemonSelectMultiple/LemonSelectMultiple'
 
 export function MergeSplitPerson({ person }: { person: PersonType }): JSX.Element {
     const logicProps = { person }
@@ -55,7 +56,7 @@ export function MergeSplitPerson({ person }: { person: PersonType }): JSX.Elemen
 }
 
 function MergePerson(): JSX.Element {
-    const { persons, person, executedLoading } = useValues(mergeSplitPersonLogic)
+    const { persons, person, executedLoading, selectedPersonsToMerge } = useValues(mergeSplitPersonLogic)
     const { setListFilters, setSelectedPersonsToMerge } = useActions(mergeSplitPersonLogic)
 
     return (
@@ -64,34 +65,30 @@ function MergePerson(): JSX.Element {
                 Merge all properties and events of the selected persons into <strong>{person.name}</strong>{' '}
                 <span style={{ fontSize: '1.2em' }}>(</span>
                 <code title={person.distinct_ids[0]}>{midEllipsis(person.distinct_ids[0], 20)}</code>
-                <span style={{ fontSize: '1.2em' }}>)</span>. If there is a <b>conflict</b>, the properties of{' '}
-                <b>this person will take precedence</b>.
+                <span style={{ fontSize: '1.2em' }}>)</span>. Properties get merged based on timestamps, see more
+                details on{' '}
+                <a href="https://posthog.com/docs/integrate/user-properties#how-do-values-get-overridden">
+                    PostHog Docs
+                </a>
+                .
             </p>
-            <Select
-                mode="multiple"
-                allowClear
-                showSearch
-                style={{ width: '100%' }}
+
+            <LemonSelectMultiple
                 placeholder="Please select persons to merge"
-                onChange={(value: number[]) => setSelectedPersonsToMerge(value)}
+                onChange={(value) => setSelectedPersonsToMerge(value.map((x) => parseInt(x, 10)))}
                 filterOption={false}
-                onSearch={(value) => {
-                    setListFilters({ search: value })
-                }}
-                className="mt"
+                onSearch={(value) => setListFilters({ search: value })}
+                mode="multiple"
+                data-attr="subscribed-emails"
+                value={selectedPersonsToMerge.map((x) => x.toString())}
+                options={(persons.results || [])
+                    .filter((p: PersonType) => p.id && p.uuid !== person.uuid)
+                    .map((p) => ({
+                        key: `${p.id}`,
+                        label: p.name,
+                    }))}
                 disabled={executedLoading}
-            >
-                {persons.results &&
-                    persons.results
-                        .filter((p: PersonType) => p.uuid !== person.uuid)
-                        .map((p: PersonType) =>
-                            p.id ? (
-                                <Select.Option value={p.id} key={p.id}>
-                                    {p.name}
-                                </Select.Option>
-                            ) : undefined
-                        )}
-            </Select>
+            />
             <InlineMessage style={{ marginTop: 16 }} type="danger">
                 This action is not reversible. Please be sure before continuing.
             </InlineMessage>

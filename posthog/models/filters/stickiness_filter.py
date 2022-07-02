@@ -1,6 +1,6 @@
 from typing import Any, Callable, Dict, Optional, Union
 
-from django.db.models.functions.datetime import TruncDay, TruncHour, TruncMinute, TruncMonth, TruncWeek
+from django.db.models.functions.datetime import TruncDay, TruncHour, TruncMonth, TruncWeek
 from rest_framework.exceptions import ValidationError
 from rest_framework.request import Request
 
@@ -10,6 +10,7 @@ from posthog.models.filters.mixins.common import (
     EntitiesMixin,
     EntityIdMixin,
     EntityMathMixin,
+    EntityOrderMixin,
     EntityTypeMixin,
     FilterTestAccountsMixin,
     InsightMixin,
@@ -28,6 +29,7 @@ class StickinessFilter(
     EntitiesMixin,
     EntityIdMixin,
     EntityTypeMixin,
+    EntityOrderMixin,
     EntityMathMixin,
     SelectedIntervalMixin,
     PropertyMixin,

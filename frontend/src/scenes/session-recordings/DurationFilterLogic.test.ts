@@ -1,18 +1,14 @@
-import { BuiltLogic } from 'kea'
 import { expectLogic } from 'kea-test-utils'
-import { initKeaTestLogic } from '~/test/init'
+import { initKeaTests } from '~/test/init'
 import { PropertyOperator } from '~/types'
-import { durationFilterLogic, DurationFilterProps, TimeUnit } from './durationFilterLogic'
-import { durationFilterLogicType } from './durationFilterLogicType'
-
-jest.mock('lib/api')
+import { durationFilterLogic } from './durationFilterLogic'
 
 describe('durationFilterLogic', () => {
-    let logic: BuiltLogic<durationFilterLogicType<DurationFilterProps, TimeUnit>>
+    let logic: ReturnType<typeof durationFilterLogic.build>
     let filterValue = {}
-    initKeaTestLogic({
-        logic: durationFilterLogic,
-        props: {
+    beforeEach(() => {
+        initKeaTests()
+        logic = durationFilterLogic({
             initialFilter: {
                 type: 'recording',
                 key: 'duration',
@@ -23,26 +19,25 @@ describe('durationFilterLogic', () => {
                 filterValue = value
             },
             pageKey: 'heyheyhey',
-        },
-        onLogic: (l) => (logic = l),
+        })
+        logic.mount()
     })
 
     describe('core assumptions', () => {
         it('initial values are set', async () => {
             await expectLogic(logic).toMatchValues({
-                unit: TimeUnit.MINUTES,
                 operator: PropertyOperator.GreaterThan,
-                timeValue: 1,
+                value: 60,
                 isOpen: false,
                 durationString: '> 1 minute',
             })
         })
 
-        it('setTimeValue changes the value and updates the string', async () => {
+        it('setValue changes the value and updates the string', async () => {
             await expectLogic(logic, () => {
-                logic.actions.setTimeValue(2)
+                logic.actions.setValue(120)
             })
-                .toMatchValues({ timeValue: 2, durationString: '> 2 minutes' })
+                .toMatchValues({ value: 120, durationString: '> 2 minutes' })
                 .toFinishListeners()
 
             expect(filterValue).toMatchObject({
@@ -51,26 +46,15 @@ describe('durationFilterLogic', () => {
             })
         })
 
-        it('setUnit changes the value and updates the string', async () => {
+        it('setValue to null is handled', async () => {
             await expectLogic(logic, () => {
-                logic.actions.setUnit(TimeUnit.HOURS)
-            }).toMatchValues({ unit: TimeUnit.HOURS, durationString: '> 1 hour' })
-
-            expect(filterValue).toMatchObject({
-                value: 3600,
-                operator: PropertyOperator.GreaterThan,
+                logic.actions.setValue(null)
             })
-        })
-
-        it('setUnit to seconds changes the value and updates the string', async () => {
-            await expectLogic(logic, () => {
-                logic.actions.setUnit(TimeUnit.SECONDS)
-                logic.actions.setTimeValue(100)
-            }).toMatchValues({ unit: TimeUnit.SECONDS, durationString: '> 100 seconds' })
+                .toMatchValues({ value: null, durationString: '> 0 seconds' })
+                .toFinishListeners()
 
             expect(filterValue).toMatchObject({
-                value: 100,
-                operator: PropertyOperator.GreaterThan,
+                value: 0,
             })
         })
 

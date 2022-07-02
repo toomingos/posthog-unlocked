@@ -82,8 +82,10 @@ export default {
 
     // A map from regular expressions to module names or to arrays of module names that allow to stub out resources with a single module
     moduleNameMapper: {
-        '^.+\\.(css|less|scss|svg|png)$': '<rootDir>/test/mocks/styleMock.js',
+        '^.+\\.(css|less|scss|svg|png|lottie)$': '<rootDir>/test/mocks/styleMock.js',
         '^~/(.*)$': '<rootDir>/$1',
+        '^@posthog/lemon-ui(|/.*)$': '<rootDir>/../@posthog/lemon-ui/src/$1',
+        '^@posthog/apps-common(|/.*)$': '<rootDir>/../@posthog/apps-common/src/$1',
         '^lib/(.*)$': '<rootDir>/lib/$1',
         '^scenes/(.*)$': '<rootDir>/scenes/$1',
         '^antd/es/(.*)$': 'antd/lib/$1',
@@ -136,7 +138,7 @@ export default {
     setupFiles: ['../../jest.setup.ts'],
 
     // A list of paths to modules that run some code to configure or set up the testing framework before each test
-    setupFilesAfterEnv: ['givens/setup'],
+    setupFilesAfterEnv: ['givens/setup', './mocks/jest.ts'],
 
     // The number of seconds after which a test is considered as slow and reported as such in the results.
     // slowTestThreshold: 5,

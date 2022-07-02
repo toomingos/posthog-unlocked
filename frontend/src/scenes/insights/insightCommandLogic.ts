@@ -1,12 +1,12 @@
 import { Command, commandPaletteLogic } from 'lib/components/CommandPalette/commandPaletteLogic'
 import { kea } from 'kea'
-import { insightCommandLogicType } from './insightCommandLogicType'
+import type { insightCommandLogicType } from './insightCommandLogicType'
 import { compareFilterLogic } from 'lib/components/CompareFilter/compareFilterLogic'
 import { RiseOutlined } from '@ant-design/icons'
 import { dateMapping } from 'lib/utils'
 import { InsightLogicProps } from '~/types'
 import { keyForInsightLogicProps } from 'scenes/insights/sharedUtils'
-import { insightDateFilterLogic } from 'scenes/insights/InsightDateFilter/insightDateFilterLogic'
+import { insightDateFilterLogic } from 'scenes/insights/filters/InsightDateFilter/insightDateFilterLogic'
 
 const INSIGHT_COMMAND_SCOPE = 'insights'
 
@@ -22,10 +22,6 @@ export const insightCommandLogic = kea<insightCommandLogicType>({
     ],
     events: ({ props }) => ({
         afterMount: () => {
-            // only load commands if this is the main insight on the main insight scene
-            if (!props.syncWithUrl) {
-                return
-            }
             const funnelCommands: Command[] = [
                 {
                     key: 'insight-graph',
@@ -53,9 +49,7 @@ export const insightCommandLogic = kea<insightCommandLogicType>({
             }
         },
         beforeUnmount: () => {
-            if (props.syncWithUrl) {
-                commandPaletteLogic.actions.deregisterScope(INSIGHT_COMMAND_SCOPE)
-            }
+            commandPaletteLogic.actions.deregisterScope(INSIGHT_COMMAND_SCOPE)
         },
     }),
 })

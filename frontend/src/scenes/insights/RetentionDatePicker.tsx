@@ -1,20 +1,19 @@
 import React from 'react'
-import dayjsGenerateConfig from 'rc-picker/lib/generate/dayjs'
-import generatePicker from 'antd/lib/date-picker/generatePicker'
 import { useActions, useValues } from 'kea'
 import { retentionTableLogic } from 'scenes/retention/retentionTableLogic'
 import { CalendarOutlined } from '@ant-design/icons'
 import { Tooltip } from 'lib/components/Tooltip'
 import { insightLogic } from 'scenes/insights/insightLogic'
 import { dayjs } from 'lib/dayjs'
+import { DatePicker } from 'lib/components/DatePicker'
 
-const DatePicker = generatePicker<dayjs.Dayjs>(dayjsGenerateConfig)
-
-export function RetentionDatePicker(): JSX.Element {
+export function RetentionDatePicker({ disabled }: { disabled?: boolean }): JSX.Element {
     const { insightProps } = useValues(insightLogic)
     const { filters } = useValues(retentionTableLogic(insightProps))
     const { setFilters } = useActions(retentionTableLogic(insightProps))
+
     const yearSuffix = filters.date_to && dayjs(filters.date_to).year() !== dayjs().year() ? ', YYYY' : ''
+
     return (
         <>
             <Tooltip title="Cohorts up to this end date">
@@ -30,6 +29,7 @@ export function RetentionDatePicker(): JSX.Element {
                         placeholder="Today"
                         className="retention-date-picker"
                         suffixIcon={null}
+                        disabled={disabled}
                     />
                 </span>
             </Tooltip>

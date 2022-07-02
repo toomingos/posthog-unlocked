@@ -1,6 +1,7 @@
 import { kea } from 'kea'
+import { convertSecondsToDuration } from 'lib/components/DurationPicker/DurationPicker'
 import { PropertyOperator, RecordingDurationFilter } from '~/types'
-import { durationFilterLogicType } from './durationFilterLogicType'
+import type { durationFilterLogicType } from './durationFilterLogicType'
 
 export enum TimeUnit {
     SECONDS = 'seconds',
@@ -14,36 +15,27 @@ export interface DurationFilterProps {
     initialFilter: RecordingDurationFilter
 }
 
-const TIME_MULTIPLIERS = { seconds: 1, minutes: 60, hours: 3600 }
-
-export const durationFilterLogic = kea<durationFilterLogicType<DurationFilterProps, TimeUnit>>({
+export const durationFilterLogic = kea<durationFilterLogicType>({
     path: (key) => ['scenes', 'session-recordings', 'DurationFilterLogic', key],
     key: (props) => props.pageKey || 'global',
     props: {} as DurationFilterProps,
     actions: {
-        setTimeValue: (timeValue: number) => ({ timeValue }),
-        setUnit: (unit: TimeUnit) => ({ unit }),
+        setValue: (value: number | null) => ({ value }),
         setIsOpen: (isOpen: boolean) => ({ isOpen }),
         setOperator: (operator: PropertyOperator) => ({ operator }),
     },
 
     reducers: ({ props }) => ({
-        unit: [
-            TimeUnit.MINUTES as TimeUnit,
-            {
-                setUnit: (_, { unit }) => unit,
-            },
-        ],
         operator: [
             props?.initialFilter?.operator,
             {
                 setOperator: (_, { operator }) => operator,
             },
         ],
-        timeValue: [
-            Math.floor(props.initialFilter.value / TIME_MULTIPLIERS[TimeUnit.MINUTES]),
+        value: [
+            props?.initialFilter?.value as number | null,
             {
-                setTimeValue: (_, { timeValue }) => timeValue,
+                setValue: (_, { value }) => value,
             },
         ],
         isOpen: [
@@ -56,19 +48,21 @@ export const durationFilterLogic = kea<durationFilterLogicType<DurationFilterPro
 
     selectors: {
         durationString: [
-            (s) => [s.operator, s.timeValue, s.unit],
-            (operator, timeValue, unit) => {
+            (s) => [s.operator, s.value],
+            (operator, value) => {
                 let durationString = ''
                 if (operator === PropertyOperator.GreaterThan) {
                     durationString += '> '
                 } else {
                     durationString += '< '
                 }
-                durationString += timeValue
-                if (timeValue === 1) {
-                    durationString += ' ' + unit.slice(0, -1)
+                const duration = convertSecondsToDuration(value || 0)
+
+                durationString += duration.timeValue || 0
+                if (duration.timeValue === 1) {
+                    durationString += ' ' + duration.unit.slice(0, -1)
                 } else {
-                    durationString += ' ' + unit
+                    durationString += ' ' + duration.unit
                 }
                 return durationString
             },
@@ -76,30 +70,16 @@ export const durationFilterLogic = kea<durationFilterLogicType<DurationFilterPro
     },
 
     listeners: ({ props, values }) => {
-        const handleChange = ({
-            timeValue,
-            unit,
-            operator,
-        }: {
-            timeValue?: number
-            unit?: TimeUnit
-            operator?: PropertyOperator
-        }): void => {
-            const timeValueToUse = timeValue || values.timeValue
-            const unitToUse = unit || values.unit
-
-            const seconds = timeValueToUse * TIME_MULTIPLIERS[unitToUse]
-
+        const handleChange = ({ value, operator }: { value?: number | null; operator?: PropertyOperator }): void => {
             props.onChange({
                 operator: operator || values.operator,
-                value: seconds,
+                value: value || values.value || 0,
                 type: 'recording',
                 key: 'duration',
             })
         }
         return {
-            setTimeValue: ({ timeValue }) => handleChange({ timeValue }),
-            setUnit: ({ unit }) => handleChange({ unit }),
+            setValue: ({ value }) => handleChange({ value }),
             setOperator: ({ operator }) => handleChange({ operator }),
         }
     },

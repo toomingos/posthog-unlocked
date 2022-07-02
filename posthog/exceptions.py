@@ -1,11 +1,14 @@
 from typing import Optional, TypedDict
 
+import structlog
 from django.conf import settings
 from django.http.request import HttpRequest
 from django.http.response import JsonResponse
 from rest_framework import status
 from rest_framework.exceptions import APIException
 from sentry_sdk import capture_exception
+
+logger = structlog.get_logger(__name__)
 
 
 class RequestParsingError(Exception):
@@ -14,6 +17,7 @@ class RequestParsingError(Exception):
 
 class EnterpriseFeatureException(APIException):
     status_code = status.HTTP_402_PAYMENT_REQUIRED
+    default_code = "payment_required"
 
     def __init__(self, feature: Optional[str] = None) -> None:
         super().__init__(
@@ -22,7 +26,7 @@ class EnterpriseFeatureException(APIException):
                 + (
                     "To use it, subscribe to PostHog Cloud with a generous free tier: https://app.posthog.com/organization/billing"
                     if settings.MULTI_TENANCY
-                    else "To use it, contact us for a self-hosted license: https://posthog.com/pricing"
+                    else "To use it, get a self-hosted license: https://license.posthog.com"
                 )
             )
         )
@@ -43,6 +47,7 @@ def exception_reporting(exception: Exception, context: ExceptionContext) -> None
     Used through drf-exceptions-hog
     """
     if not isinstance(exception, APIException):
+        logger.exception(exception, path=context["request"].path)
         capture_exception(exception)
 
 

@@ -1,16 +1,13 @@
 import Piscina from '@posthog/piscina'
-import { PluginEvent } from '@posthog/plugin-scaffold'
 import * as Sentry from '@sentry/node'
-import AdmZip from 'adm-zip'
 import { randomBytes } from 'crypto'
 import Redis, { RedisOptions } from 'ioredis'
 import { DateTime } from 'luxon'
 import { Pool, PoolConfig } from 'pg'
 import { Readable } from 'stream'
-import * as tar from 'tar-stream'
-import * as zlib from 'zlib'
 
 import { LogLevel, Plugin, PluginConfigId, PluginsServerConfig, TimestampFormat } from '../types'
+import { Hub } from './../types'
 import { status } from './status'
 
 /** Time until autoexit (due to error) gives up on graceful exit and kills the process right away. */
@@ -40,83 +37,6 @@ export function bufferToStream(binary: Buffer): Readable {
     })
 
     return readableInstanceStream
-}
-
-export async function getFileFromArchive(archive: Buffer, file: string): Promise<string | null> {
-    try {
-        return getFileFromZip(archive, file)
-    } catch (e) {
-        try {
-            return await getFileFromTGZ(archive, file)
-        } catch (e) {
-            throw new Error(`Could not read archive as .zip or .tgz`)
-        }
-    }
-}
-
-export async function getFileFromTGZ(archive: Buffer, file: string): Promise<string | null> {
-    const response = await new Promise((resolve: (value: string | null) => void, reject: (error?: Error) => void) => {
-        const stream = bufferToStream(archive)
-        const extract = tar.extract()
-
-        let rootPath: string | null = null
-        let fileData: string | null = null
-
-        extract.on('entry', (header, stream, next) => {
-            if (rootPath === null) {
-                const rootPathArray = header.name.split('/')
-                rootPathArray.pop()
-                rootPath = rootPathArray.join('/')
-            }
-            if (header.name == `${rootPath}/${file}`) {
-                stream.on('data', (chunk) => {
-                    if (fileData === null) {
-                        fileData = ''
-                    }
-                    fileData += chunk
-                })
-            }
-            stream.on('end', () => next())
-            stream.resume() // just auto drain the stream
-        })
-
-        extract.on('finish', function () {
-            resolve(fileData)
-        })
-
-        extract.on('error', reject)
-
-        const unzipStream = zlib.createUnzip()
-        unzipStream.on('error', reject)
-
-        stream.pipe(unzipStream).pipe(extract)
-    })
-
-    return response
-}
-
-export function getFileFromZip(archive: Buffer, file: string): string | null {
-    const zip = new AdmZip(archive)
-    const zipEntries = zip.getEntries() // an array of ZipEntry records
-    let fileData
-
-    if (zipEntries[0].entryName.endsWith('/')) {
-        // if first entry is `pluginfolder/` (a folder!)
-        const root = zipEntries[0].entryName
-        fileData = zip.getEntry(`${root}${file}`)
-    } else {
-        // if first entry is `pluginfolder/index.js` (or whatever file)
-        const rootPathArray = zipEntries[0].entryName.split('/')
-        rootPathArray.pop()
-        const root = rootPathArray.join('/')
-        fileData = zip.getEntry(`${root}/${file}`)
-    }
-
-    if (fileData) {
-        return fileData.getData().toString()
-    }
-
-    return null
 }
 
 export function setLogLevel(logLevel: LogLevel): void {
@@ -479,49 +399,6 @@ export function createPostgresPool(
     return pgPool
 }
 
-export function sanitizeEvent(event: PluginEvent): PluginEvent {
-    event.distinct_id = event.distinct_id?.toString()
-    return event
-}
-
-export enum NodeEnv {
-    Development = 'dev',
-    Production = 'prod',
-    Test = 'test',
-}
-
-export function stringToBoolean(value: unknown, strict?: false): boolean
-export function stringToBoolean(value: unknown, strict: true): boolean | null
-export function stringToBoolean(value: unknown, strict = false): boolean | null {
-    const stringValue = String(value).toLowerCase()
-    const isStrictlyTrue = ['y', 'yes', 't', 'true', 'on', '1'].includes(stringValue)
-    if (isStrictlyTrue) {
-        return true
-    }
-    if (strict) {
-        const isStrictlyFalse = ['n', 'no', 'f', 'false', 'off', '0'].includes(stringValue)
-        return isStrictlyFalse ? false : null
-    }
-    return false
-}
-
-export function determineNodeEnv(): NodeEnv {
-    let nodeEnvRaw = process.env.NODE_ENV
-    if (nodeEnvRaw) {
-        nodeEnvRaw = nodeEnvRaw.toLowerCase()
-        if (nodeEnvRaw.startsWith(NodeEnv.Test)) {
-            return NodeEnv.Test
-        }
-        if (nodeEnvRaw.startsWith(NodeEnv.Development)) {
-            return NodeEnv.Development
-        }
-    }
-    if (stringToBoolean(process.env.DEBUG)) {
-        return NodeEnv.Development
-    }
-    return NodeEnv.Production
-}
-
 export function getPiscinaStats(piscina: Piscina): Record<string, number> {
     return {
         utilization: (piscina.utilization || 0) * 100,
@@ -557,7 +434,7 @@ export function pluginConfigIdFromStack(
     // This matches `pluginConfigIdentifier` from worker/vm/vm.ts
     // For example: "at __asyncGuard__PluginConfig_39_3af03d... (vm.js:11..."
     const regexp = /at __[a-zA-Z0-9]+__PluginConfig_([0-9]+)_([0-9a-f]+) \(vm\.js\:/
-    const [_, id, hash] =
+    const [, id, hash] =
         stack
             .split('\n')
             .map((l) => l.match(regexp))
@@ -601,7 +478,7 @@ export function groupBy<T extends Record<string, any>, K extends keyof T>(
         ? objects.reduce((grouping, currentItem) => {
               if (currentItem[key] in grouping) {
                   throw new Error(
-                      `Key "${key}" has more than one matching value, which is not allowed in flat groupBy!`
+                      `Key "${String(key)}" has more than one matching value, which is not allowed in flat groupBy!`
                   )
               }
               grouping[currentItem[key]] = currentItem
@@ -697,4 +574,29 @@ export function intToBase(num: number, base: number): string {
 // concerning race conditions across threads
 export class RaceConditionError extends Error {
     name = 'RaceConditionError'
+}
+
+export interface StalenessCheckResult {
+    isServerStale: boolean
+    timeSinceLastActivity: number | null
+    lastActivity?: string | null
+    lastActivityType?: string
+    instanceId?: string
+}
+
+export function stalenessCheck(hub: Hub | undefined, stalenessSeconds: number): StalenessCheckResult {
+    let isServerStale = false
+
+    const timeSinceLastActivity = hub?.lastActivity ? new Date().valueOf() - hub.lastActivity : null
+    if (timeSinceLastActivity && timeSinceLastActivity > stalenessSeconds * 1000) {
+        isServerStale = true
+    }
+
+    return {
+        isServerStale,
+        timeSinceLastActivity,
+        instanceId: hub?.instanceId.toString(),
+        lastActivity: hub?.lastActivity ? new Date(hub.lastActivity).toISOString() : null,
+        lastActivityType: hub?.lastActivityType,
+    }
 }

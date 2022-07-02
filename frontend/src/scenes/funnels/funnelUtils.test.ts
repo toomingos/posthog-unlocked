@@ -3,8 +3,9 @@ import {
     getBreakdownStepValues,
     getIncompleteConversionWindowStartDate,
     getMeanAndStandardDeviation,
+    getClampedStepRangeFilter,
 } from './funnelUtils'
-import { FunnelConversionWindowTimeUnit } from '~/types'
+import { FilterType, FunnelConversionWindowTimeUnit, FunnelStepRangeEntityFilter } from '~/types'
 import { dayjs } from 'lib/dayjs'
 
 describe('getMeanAndStandardDeviation', () => {
@@ -140,6 +141,65 @@ describe('getIncompleteConversionWindowStartDate()', () => {
     windows.forEach(({ expected, ...w }) => {
         it(`get start date of conversion window ${w.funnel_window_interval} ${w.funnel_window_interval_unit}s`, () => {
             expect(getIncompleteConversionWindowStartDate(w, frozenStartDate).toISOString()).toEqual(expected)
+        })
+    })
+})
+
+describe('getClampedStepRangeFilter', () => {
+    it('prefers step range to existing filters', () => {
+        const stepRange = {
+            funnel_from_step: 0,
+            funnel_to_step: 1,
+        } as FunnelStepRangeEntityFilter
+        const filters = {
+            funnel_from_step: 1,
+            funnel_to_step: 2,
+            actions: [{}, {}],
+            events: [{}, {}],
+        } as FilterType
+        const clampedStepRange = getClampedStepRangeFilter({
+            stepRange,
+            filters,
+        })
+        expect(clampedStepRange).toEqual({
+            funnel_from_step: 0,
+            funnel_to_step: 1,
+        })
+    })
+
+    it('ensures step range is clamped to step range', () => {
+        const stepRange = {} as FunnelStepRangeEntityFilter
+        const filters = {
+            funnel_from_step: -1,
+            funnel_to_step: 12,
+            actions: [{}, {}],
+            events: [{}, {}],
+        } as FilterType
+        const clampedStepRange = getClampedStepRangeFilter({
+            stepRange,
+            filters,
+        })
+        expect(clampedStepRange).toEqual({
+            funnel_from_step: 0,
+            funnel_to_step: 3,
+        })
+    })
+
+    it('returns undefined if the incoming filters are undefined', () => {
+        const stepRange = {} as FunnelStepRangeEntityFilter
+        const filters = {
+            funnel_from_step: undefined,
+            funnel_to_step: undefined,
+            actions: [{}, {}],
+            events: [{}, {}],
+        } as FilterType
+        const clampedStepRange = getClampedStepRangeFilter({
+            stepRange,
+            filters,
+        })
+        expect(clampedStepRange).toEqual({
+            funnel_from_step: undefined,
+            funnel_to_step: undefined,
         })
     })
 })

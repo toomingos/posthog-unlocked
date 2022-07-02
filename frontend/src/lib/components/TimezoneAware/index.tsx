@@ -9,6 +9,7 @@ import { eventUsageLogic } from 'lib/utils/eventUsageLogic'
 import { TooltipPlacement } from 'antd/lib/tooltip'
 import { teamLogic } from '../../../scenes/teamLogic'
 import { dayjs } from 'lib/dayjs'
+import { usePeriodicRerender } from 'lib/hooks/usePeriodicRerender'
 
 const BASE_OUTPUT_FORMAT = 'ddd, MMM D, YYYY HH:mm'
 
@@ -29,12 +30,16 @@ function TZConversionHeader(): JSX.Element {
 function TZLabelRaw({
     time,
     showSeconds,
-    formatString,
+    formatDate,
+    formatTime,
 }: {
     time: string | dayjs.Dayjs
     showSeconds?: boolean
-    formatString?: string
+    formatDate?: string
+    formatTime?: string
 }): JSX.Element {
+    usePeriodicRerender(1000)
+
     const parsedTime = dayjs.isDayjs(time) ? time : dayjs(time)
     const { currentTeam } = useValues(teamLogic)
 
@@ -92,7 +97,9 @@ function TZLabelRaw({
     return (
         <Popover content={PopoverContent} onVisibleChange={handleVisibleChange}>
             <span className="tz-label">
-                {formatString ? humanFriendlyDetailedTime(parsedTime, undefined, formatString) : parsedTime.fromNow()}
+                {formatDate || formatTime
+                    ? humanFriendlyDetailedTime(parsedTime, formatDate, formatTime)
+                    : parsedTime.fromNow()}
             </span>
         </Popover>
     )

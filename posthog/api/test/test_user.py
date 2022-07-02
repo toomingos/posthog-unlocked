@@ -2,12 +2,22 @@ import uuid
 from unittest.mock import ANY, patch
 
 import pytest
+from django.core.cache import cache
 from django.utils.text import slugify
 from rest_framework import status
 
-from posthog.models import Team, User
-from posthog.models.organization import Organization
+from posthog.models import Tag, Team, User
+from posthog.models.organization import Organization, OrganizationMembership
 from posthog.test.base import APIBaseTest
+
+
+def create_user(email: str, password: str, organization: Organization):
+    """
+    Helper that just creates a user. It currently uses the orm, but we
+    could use either the api, or django admin to create, to get better parity
+    with real world scenarios.
+    """
+    return User.objects.create_and_join(organization, email, password)
 
 
 class TestUserAPI(APIBaseTest):
@@ -30,6 +40,12 @@ class TestUserAPI(APIBaseTest):
         cls.user.current_organization = cls.organization
         cls.user.current_team = cls.team
         cls.user.save()
+
+    def setUp(self):
+        # prevent throttling of user requests to pass on from one test
+        # to the next
+        cache.clear()
+        return super().setUp()
 
     # RETRIEVING USER
 
@@ -84,54 +100,61 @@ class TestUserAPI(APIBaseTest):
 
     @pytest.mark.ee
     def test_organization_metadata_on_user_serializer(self):
+        try:
+            from ee.models import EnterpriseEventDefinition, EnterprisePropertyDefinition
+        except ImportError:
+            pass
+        else:
+            enterprise_event = EnterpriseEventDefinition.objects.create(
+                team=self.team, name="enterprise event", owner=self.user
+            )
+            tag = Tag.objects.create(name="deprecated", team_id=self.team.id)
+            enterprise_event.tagged_items.create(tag_id=tag.id)
+            EnterpriseEventDefinition.objects.create(
+                team=self.team, name="a new event", owner=self.user  # I shouldn't be counted
+            )
+            timestamp_property = EnterprisePropertyDefinition.objects.create(
+                team=self.team, name="a timestamp", property_type="DateTime", description="This is a cool timestamp.",
+            )
+            tag_test = Tag.objects.create(name="test", team_id=self.team.id)
+            tag_official = Tag.objects.create(name="official", team_id=self.team.id)
+            timestamp_property.tagged_items.create(tag_id=tag_test.id)
+            timestamp_property.tagged_items.create(tag_id=tag_official.id)
+            EnterprisePropertyDefinition.objects.create(
+                team=self.team, name="plan", description="The current membership plan the user has active.",
+            )
+            tagged_property = EnterprisePropertyDefinition.objects.create(team=self.team, name="property")
+            tag_test2 = Tag.objects.create(name="test2", team_id=self.team.id)
+            tagged_property.tagged_items.create(tag_id=tag_test2.id)
+            EnterprisePropertyDefinition.objects.create(
+                team=self.team, name="some_prop",  # I shouldn't be counted
+            )
 
-        from ee.models import EnterpriseEventDefinition, EnterprisePropertyDefinition
+            response = self.client.get("/api/users/@me/")
 
-        EnterpriseEventDefinition.objects.create(
-            team=self.team, name="enterprise event", owner=self.user, tags=["deprecated"]
-        )
-        EnterpriseEventDefinition.objects.create(
-            team=self.team, name="a new event", owner=self.user  # I shouldn't be counted
-        )
-        EnterprisePropertyDefinition.objects.create(
-            team=self.team,
-            name="a timestamp",
-            property_type="DateTime",
-            property_type_format="unix_timestamp",
-            description="This is a cool timestamp.",
-            tags=["test", "official"],
-        )
-        EnterprisePropertyDefinition.objects.create(
-            team=self.team, name="plan", description="The current membership plan the user has active.",
-        )
-        EnterprisePropertyDefinition.objects.create(
-            team=self.team, name="some_prop",  # I shouldn't be counted
-        )
+            self.assertEqual(response.status_code, status.HTTP_200_OK)
+            response_data = response.json()
+            self.assertEqual(response_data["organization"]["metadata"]["taxonomy_set_events_count"], 1)
+            self.assertEqual(response_data["organization"]["metadata"]["taxonomy_set_properties_count"], 3)
 
-        response = self.client.get("/api/users/@me/")
-
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        response_data = response.json()
-        self.assertEqual(response_data["organization"]["metadata"]["taxonomy_set_events_count"], 1)
-        self.assertEqual(response_data["organization"]["metadata"]["taxonomy_set_properties_count"], 2)
-
-    def test_cannot_retrieve_or_list_other_users(self):
+    def test_can_only_list_yourself(self):
         """
-        At this moment only the current user can be retrieved from this endpoint. Listing is not supported.
+        At this moment only the current user can be retrieved from this endpoint.
         """
         response = self.client.get("/api/users/")
-        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
-        self.assertEqual(response.json(), self.not_found_response("Endpoint not found."))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.json()["count"], 1)
+        self.assertEqual(response.json()["results"][0]["uuid"], str(self.user.uuid))
 
         user = self._create_user("newtest@posthog.com")
         response = self.client.get(f"/api/users/{user.uuid}")
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(
             response.json(),
             {
-                "type": "validation_error",
-                "code": "invalid_parameter",
-                "detail": "Currently this endpoint only supports retrieving `@me` instance.",
+                "type": "authentication_error",
+                "code": "permission_denied",
+                "detail": "As a non-staff user you're only allowed to access the `@me` user instance.",
                 "attr": None,
             },
         )
@@ -152,8 +175,8 @@ class TestUserAPI(APIBaseTest):
         count = User.objects.count()
 
         response = self.client.post("/api/users/", {"first_name": "James", "email": "test+james@posthog.com"})
-        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
-        self.assertEqual(response.json(), self.not_found_response("Endpoint not found."))
+        self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+        self.assertEqual(response.json(), self.method_not_allowed_response("POST"))
 
         self.assertEqual(User.objects.count(), count)
 
@@ -175,7 +198,6 @@ class TestUserAPI(APIBaseTest):
                 "events_column_config": {"active": ["column_1", "column_2"]},
                 "uuid": 1,  # should be ignored
                 "id": 1,  # should be ignored
-                "is_staff": True,  # should be ignored
                 "organization": str(another_org.id),  # should be ignored
                 "team": str(another_team.id),  # should be ignored
             },
@@ -190,7 +212,6 @@ class TestUserAPI(APIBaseTest):
         self.assertEqual(response_data["anonymize_data"], True)
         self.assertEqual(response_data["email_opt_in"], False)
         self.assertEqual(response_data["events_column_config"], {"active": ["column_1", "column_2"]})
-        self.assertEqual(response_data["is_staff"], False)
         self.assertEqual(response_data["organization"]["id"], str(self.organization.id))
         self.assertEqual(response_data["team"]["id"], self.team.id)
 
@@ -209,6 +230,17 @@ class TestUserAPI(APIBaseTest):
             },
             groups={"instance": ANY, "organization": str(self.team.organization_id), "project": str(self.team.uuid),},
         )
+
+    def test_cannot_upgrade_yourself_to_staff_user(self):
+        response = self.client.patch("/api/users/@me/", {"is_staff": True},)
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(
+            response.json(), self.permission_denied_response("You are not a staff user, contact your instance admin.")
+        )
+
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.is_staff, False)
 
     @patch("posthoganalytics.capture")
     def test_can_update_current_organization(self, mock_capture):
@@ -342,6 +374,22 @@ class TestUserAPI(APIBaseTest):
         )
 
         self._assert_current_org_and_team_unchanged()
+
+    def test_current_team_prefer_current_organization(self):
+        """
+        If current_organization is set but current_team isn't (for example when a team is deleted), make sure we set the team in the current organization
+        """
+        org2 = Organization.objects.create(name="bla")
+        OrganizationMembership.objects.create(organization=org2, user=self.user)
+        team2 = Team.objects.create(organization=org2)
+
+        # select current organization
+        self.user.current_organization = org2
+        self.user.current_team = None
+        self.user.save()
+
+        response = self.client.get("/api/users/@me/").json()
+        self.assertEqual(response["team"]["id"], team2.pk)
 
     @patch("posthoganalytics.capture")
     def test_user_can_update_password(self, mock_capture):
@@ -501,6 +549,39 @@ class TestUserAPI(APIBaseTest):
         self.assertNotEqual(self.user.email, "new@posthog.com")
         self.assertFalse(self.user.check_password("hijacked"))
 
+    def test_user_cannot_update_password_with_incorrect_current_password_and_ratelimit_to_prevent_attacks(self):
+
+        for i in range(7):
+            response = self.client.patch("/api/users/@me/", {"current_password": "wrong", "password": "12345678"})
+        self.assertEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+        self.assertDictContainsSubset(
+            {"attr": None, "code": "throttled", "type": "throttled_error"}, response.json(),
+        )
+
+        # Password was not changed
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password(self.CONFIG_PASSWORD))
+
+    def test_no_ratelimit_for_get_requests_for_users(self):
+
+        for i in range(6):
+            response = self.client.get("/api/users/@me/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        for i in range(4):
+            # below rate limit, so shouldn't be throttled
+            response = self.client.patch("/api/users/@me/", {"current_password": "wrong", "password": "12345678"})
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+        for i in range(2):
+            response = self.client.get("/api/users/@me/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        for i in range(2):
+            # finally above rate limit, so should be throttled
+            response = self.client.patch("/api/users/@me/", {"current_password": "wrong", "password": "12345678"})
+        self.assertEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+
     # DELETING USER
 
     def test_deleting_current_user_is_not_supported(self):
@@ -512,6 +593,24 @@ class TestUserAPI(APIBaseTest):
         self.assertEqual(response.json(), self.method_not_allowed_response("DELETE"))
 
         self.user.refresh_from_db()
+
+    @patch("posthog.api.user.secrets.token_urlsafe")
+    def test_redirect_user_to_site_with_toolbar(self, patched_token):
+        patched_token.return_value = "tokenvalue"
+
+        response = self.client.get(
+            "/api/user/redirect_to_site/?userIntent=add-action&appUrl=http%3A%2F%2F127.0.0.1%3A8000"
+        )
+        self.assertEqual(response.status_code, status.HTTP_302_FOUND)
+        locationHeader = response.headers.get("location", "not found")
+        self.assertIn(
+            "%22jsURL%22%3A%20%22http%3A%2F%2Flocalhost%3A8234%22", locationHeader,
+        )
+        self.maxDiff = None
+        self.assertEqual(
+            locationHeader,
+            "http://127.0.0.1:8000#__posthog=%7B%22action%22%3A%20%22ph_authorize%22%2C%20%22token%22%3A%20%22token123%22%2C%20%22temporaryToken%22%3A%20%22tokenvalue%22%2C%20%22actionId%22%3A%20null%2C%20%22userIntent%22%3A%20%22add-action%22%2C%20%22toolbarVersion%22%3A%20%22toolbar%22%2C%20%22dataAttributes%22%3A%20%5B%22data-attr%22%5D%2C%20%22jsURL%22%3A%20%22http%3A%2F%2Flocalhost%3A8234%22%7D",
+        )
 
 
 class TestUserSlackWebhook(APIBaseTest):
@@ -543,10 +642,68 @@ class TestLoginViews(APIBaseTest):
         self.assertRedirects(response, "/preflight")
 
 
-def create_user(email: str, password: str, organization: Organization):
-    """
-    Helper that just creates a user. It currently uses the orm, but we
-    could use either the api, or django admin to create, to get better parity
-    with real world scenarios.
-    """
-    return User.objects.create_and_join(organization, email, password)
+class TestStaffUserAPI(APIBaseTest):
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.user.is_staff = True
+        cls.user.save()
+
+    def test_can_list_staff_users(self):
+
+        response = self.client.get("/api/users/?is_staff=true")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        response_data = response.json()
+        self.assertEqual(response_data["count"], 1)
+        self.assertEqual(response_data["results"][0]["is_staff"], True)
+        self.assertEqual(response_data["results"][0]["email"], self.CONFIG_EMAIL)
+
+    def test_only_staff_can_list_other_users(self):
+        self.user.is_staff = False
+        self.user.save()
+
+        response = self.client.get("/api/users")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.json()["count"], 1)
+        self.assertEqual(response.json()["results"][0]["uuid"], str(self.user.uuid))
+
+    def test_update_staff_user(self):
+        user = self._create_user("newuser@posthog.com", password="12345678")
+        self.assertEqual(user.is_staff, False)
+
+        # User becomes staff
+        response = self.client.patch(f"/api/users/{user.uuid}/", {"is_staff": True})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        response_data = response.json()
+        self.assertEqual(response_data["is_staff"], True)
+        user.refresh_from_db()
+        self.assertEqual(user.is_staff, True)
+
+        # User is no longer staff
+        response = self.client.patch(f"/api/users/{user.uuid}/", {"is_staff": False})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        response_data = response.json()
+        self.assertEqual(response_data["is_staff"], False)
+        user.refresh_from_db()
+        self.assertEqual(user.is_staff, False)
+
+    def test_only_staff_user_can_update_staff_prop(self):
+        user = self._create_user("newuser@posthog.com", password="12345678")
+
+        self.user.is_staff = False
+        self.user.save()
+
+        response = self.client.patch(f"/api/users/{user.uuid}/", {"is_staff": True})
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(
+            response.json(),
+            {
+                "type": "authentication_error",
+                "code": "permission_denied",
+                "detail": "As a non-staff user you're only allowed to access the `@me` user instance.",
+                "attr": None,
+            },
+        )
+
+        user.refresh_from_db()
+        self.assertEqual(user.is_staff, False)

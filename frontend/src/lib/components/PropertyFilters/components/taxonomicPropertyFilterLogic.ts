@@ -1,15 +1,15 @@
 import { kea } from 'kea'
-import { propertyFilterLogic } from 'lib/components/PropertyFilters/propertyFilterLogic'
 import { TaxonomicPropertyFilterLogicProps } from 'lib/components/PropertyFilters/types'
-import { AnyPropertyFilter, PropertyFilterValue, PropertyOperator } from '~/types'
-import { taxonomicPropertyFilterLogicType } from './taxonomicPropertyFilterLogicType'
+import { AnyPropertyFilter, PropertyFilterValue, PropertyOperator, PropertyType } from '~/types'
+import type { taxonomicPropertyFilterLogicType } from './taxonomicPropertyFilterLogicType'
 import { cohortsModel } from '~/models/cohortsModel'
-import { TaxonomicFilterGroup } from 'lib/components/TaxonomicFilter/types'
+import { TaxonomicFilterGroup, TaxonomicFilterValue } from 'lib/components/TaxonomicFilter/types'
 import {
     propertyFilterTypeToTaxonomicFilterType,
     taxonomicFilterTypeToPropertyFilterType,
 } from 'lib/components/PropertyFilters/utils'
 import { taxonomicFilterLogic } from 'lib/components/TaxonomicFilter/taxonomicFilterLogic'
+import { propertyDefinitionsModel } from '~/models/propertyDefinitionsModel'
 
 export const taxonomicPropertyFilterLogic = kea<taxonomicPropertyFilterLogicType>({
     path: (key) => ['lib', 'components', 'PropertyFilters', 'components', 'taxonomicPropertyFilterLogic', key],
@@ -18,7 +18,7 @@ export const taxonomicPropertyFilterLogic = kea<taxonomicPropertyFilterLogicType
 
     connect: (props: TaxonomicPropertyFilterLogicProps) => ({
         values: [
-            propertyFilterLogic(props),
+            props.propertyFilterLogic,
             ['filters'],
             taxonomicFilterLogic({
                 taxonomicFilterLogicKey: props.pageKey,
@@ -27,11 +27,13 @@ export const taxonomicPropertyFilterLogic = kea<taxonomicPropertyFilterLogicType
                 eventNames: props.eventNames,
             }),
             ['taxonomicGroups'],
+            propertyDefinitionsModel,
+            ['describeProperty'],
         ],
     }),
 
     actions: {
-        selectItem: (taxonomicGroup: TaxonomicFilterGroup, propertyKey?: PropertyFilterValue) => ({
+        selectItem: (taxonomicGroup: TaxonomicFilterGroup, propertyKey?: TaxonomicFilterValue) => ({
             taxonomicGroup,
             propertyKey,
         }),
@@ -77,20 +79,29 @@ export const taxonomicPropertyFilterLogic = kea<taxonomicPropertyFilterLogicType
             const propertyType = taxonomicFilterTypeToPropertyFilterType(taxonomicGroup.type)
             if (propertyKey && propertyType) {
                 if (propertyType === 'cohort') {
-                    propertyFilterLogic(props).actions.setFilter(
+                    props.propertyFilterLogic.actions.setFilter(
                         props.filterIndex,
                         'id',
-                        propertyKey,
+                        propertyKey as PropertyFilterValue,
                         null,
                         propertyType
                     )
                 } else {
+                    const propertyValueType = values.describeProperty(propertyKey)
+                    const property_name_to_default_operator_override = {
+                        $active_feature_flags: PropertyOperator.IContains,
+                    }
+                    const property_value_type_to_default_operator_override = {
+                        [PropertyType.Duration]: PropertyOperator.GreaterThan,
+                        [PropertyType.DateTime]: PropertyOperator.IsDateExact,
+                    }
                     const operator =
-                        propertyKey === '$active_feature_flags'
-                            ? PropertyOperator.IContains
-                            : values.filter?.operator || PropertyOperator.Exact
+                        property_name_to_default_operator_override[propertyKey] ||
+                        values.filter?.operator ||
+                        property_value_type_to_default_operator_override[propertyValueType ?? ''] ||
+                        PropertyOperator.Exact
 
-                    propertyFilterLogic(props).actions.setFilter(
+                    props.propertyFilterLogic.actions.setFilter(
                         props.filterIndex,
                         propertyKey.toString(),
                         null, // Reset value field

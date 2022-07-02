@@ -2,19 +2,17 @@ from typing import Callable
 from unittest.mock import patch
 
 from dateutil.relativedelta import relativedelta
-from django.utils.timezone import datetime, now
+from django.utils.timezone import now
 from freezegun import freeze_time
 
-from posthog.models import Event, Organization, Person, Plugin, Team
+from posthog.models import Organization, Plugin, Team
 from posthog.models.plugin import PluginConfig
-from posthog.models.utils import UUIDT
 from posthog.tasks.status_report import status_report
 from posthog.test.base import APIBaseTest
-from posthog.utils import is_clickhouse_enabled
 from posthog.version import VERSION
 
 
-def factory_status_report(_create_event: Callable, _create_person: Callable) -> "TestStatusReport":
+def factory_status_report(_create_event: Callable, _create_person: Callable):  # type: ignore
     class TestStatusReport(APIBaseTest):
         def create_new_org_and_team(self, for_internal_metrics: bool = False) -> Team:
             org = Organization.objects.create(name="New Org", for_internal_metrics=for_internal_metrics)
@@ -42,12 +40,34 @@ def factory_status_report(_create_event: Callable, _create_person: Callable) -> 
             with freeze_time("2020-11-10"):
                 _create_person("new_user1", team=self.team)
                 _create_person("new_user2", team=self.team)
-                _create_event("new_user1", "$event1", "$web", now() - relativedelta(weeks=1, hours=2), team=self.team)
-                _create_event("new_user1", "$event2", "$web", now() - relativedelta(weeks=1, hours=1), team=self.team)
                 _create_event(
-                    "new_user1", "$event2", "$mobile", now() - relativedelta(weeks=1, hours=1), team=self.team
+                    distinct_id="new_user1",
+                    event="$event1",
+                    properties={"$lib": "$web"},
+                    timestamp=now() - relativedelta(weeks=1, hours=2),
+                    team=self.team,
                 )
-                _create_event("new_user1", "$event3", "$mobile", now() - relativedelta(weeks=5), team=self.team)
+                _create_event(
+                    distinct_id="new_user1",
+                    event="$event2",
+                    properties={"$lib": "$web"},
+                    timestamp=now() - relativedelta(weeks=1, hours=1),
+                    team=self.team,
+                )
+                _create_event(
+                    distinct_id="new_user1",
+                    event="$event2",
+                    properties={"$lib": "$mobile"},
+                    timestamp=now() - relativedelta(weeks=1, hours=1),
+                    team=self.team,
+                )
+                _create_event(
+                    distinct_id="new_user1",
+                    event="$event3",
+                    properties={"$lib": "$mobile"},
+                    timestamp=now() - relativedelta(weeks=5),
+                    team=self.team,
+                )
 
                 team_report = status_report(dry_run=True).get("teams")[self.team.id]  # type: ignore
 
@@ -66,7 +86,11 @@ def factory_status_report(_create_event: Callable, _create_person: Callable) -> 
                 _create_person("new_user1", team=team_in_other_org)
                 _create_person("new_user2", team=team_in_other_org)
                 _create_event(
-                    "new_user1", "$event1", "$web", now() - relativedelta(weeks=1, hours=2), team=team_in_other_org
+                    distinct_id="new_user1",
+                    event="$event1",
+                    properties={"$lib": "$web"},
+                    timestamp=now() - relativedelta(weeks=1, hours=2),
+                    team=team_in_other_org,
                 )
 
                 # Make sure the original team report is unchanged
@@ -91,10 +115,18 @@ def factory_status_report(_create_event: Callable, _create_person: Callable) -> 
                 )
                 # Create an event before and after this current period
                 _create_event(
-                    "new_user1", "$eventBefore", "$web", now() + relativedelta(weeks=2, hours=2), team=self.team
+                    distinct_id="new_user1",
+                    event="$eventBefore",
+                    properties={"$lib": "$web"},
+                    timestamp=now() + relativedelta(weeks=2, hours=2),
+                    team=self.team,
                 )
                 _create_event(
-                    "new_user1", "$eventAfter", "$web", now() - relativedelta(weeks=2, hours=2), team=self.team
+                    distinct_id="new_user1",
+                    event="$eventAfter",
+                    properties={"$lib": "$web"},
+                    timestamp=now() - relativedelta(weeks=2, hours=2),
+                    team=self.team,
                 )
 
                 updated_team_report = status_report(dry_run=True).get("teams")[self.team.id]  # type: ignore
@@ -122,13 +154,25 @@ def factory_status_report(_create_event: Callable, _create_person: Callable) -> 
                 internal_metrics_team = self.create_new_org_and_team(for_internal_metrics=True)
                 _create_person("new_user1", team=internal_metrics_team)
                 _create_event(
-                    "new_user1", "$event1", "$web", now() - relativedelta(weeks=1, hours=2), team=internal_metrics_team
+                    distinct_id="new_user1",
+                    event="$event1",
+                    properties={"$lib": "$web"},
+                    timestamp=now() - relativedelta(weeks=1, hours=2),
+                    team=internal_metrics_team,
                 )
                 _create_event(
-                    "new_user1", "$event2", "$web", now() - relativedelta(weeks=1, hours=2), team=internal_metrics_team
+                    distinct_id="new_user1",
+                    event="$event2",
+                    properties={"$lib": "$web"},
+                    timestamp=now() - relativedelta(weeks=1, hours=2),
+                    team=internal_metrics_team,
                 )
                 _create_event(
-                    "new_user1", "$event3", "$web", now() - relativedelta(weeks=1, hours=2), team=internal_metrics_team
+                    distinct_id="new_user1",
+                    event="$event3",
+                    properties={"$lib": "$web"},
+                    timestamp=now() - relativedelta(weeks=1, hours=2),
+                    team=internal_metrics_team,
                 )
                 # Verify that internal metrics events are not counted
                 self.assertEqual(
@@ -148,23 +192,4 @@ def factory_status_report(_create_event: Callable, _create_person: Callable) -> 
             self.assertEqual(report["plugins_installed"], {"Installed but not enabled": 1, "Installed and enabled": 1})
             self.assertEqual(report["plugins_enabled"], {"Installed and enabled": 1})
 
-    return TestStatusReport  # type: ignore
-
-
-def create_person(distinct_id: str, team: Team) -> None:
-    Person.objects.create(team=team, distinct_ids=[distinct_id])
-
-
-def create_event(distinct_id: str, event: str, lib: str, created_at: datetime, team: Team) -> None:
-    Event.objects.create(
-        team=team,
-        distinct_id=distinct_id,
-        event=event,
-        timestamp=created_at,
-        created_at=created_at,
-        properties={"$lib": lib},
-    )
-
-
-class TestStatusReport(factory_status_report(create_event, create_person)):  # type: ignore
-    pass
+    return TestStatusReport

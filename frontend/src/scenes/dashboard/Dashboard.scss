@@ -1,37 +1,22 @@
-@import '~/vars';
+@import '../../styles/mixins';
 
 .dashboard {
     margin-top: 1rem;
 
-    .dashboard-items-actions {
-        margin-bottom: $default_spacing;
-        display: flex;
+    .dashboard-items-action-icon {
+        margin-right: 6px;
+    }
 
-        .left-item {
-            flex-grow: 1;
+    .dashboard-items-action-refresh-text {
+        visibility: visible;
 
-            .dashboard-items-action-icon {
-                margin-right: 6px;
-            }
-
-            .dashboard-items-action-refresh-text {
-                visibility: visible;
-
-                &.hidden {
-                    visibility: hidden;
-                }
-
-                &.completed {
-                    position: absolute;
-                    left: 30px;
-                }
-            }
+        &.hidden {
+            visibility: hidden;
         }
 
-        .right-item {
-            .ant-btn {
-                padding-left: 4px !important;
-            }
+        &.completed {
+            position: absolute;
+            left: 30px;
         }
     }
 
@@ -49,7 +34,7 @@
             height: 200px;
             width: 200px;
             max-width: 100%;
-            margin-top: $default_spacing;
+            margin-top: 1rem;
 
             @media (max-width: 992px) {
                 height: 140px;
@@ -59,11 +44,9 @@
 
         .bar-chart {
             display: flex;
-            margin-top: $default_spacing;
+            margin-top: 1rem;
             align-items: flex-end;
             .bar-el {
-                background-color: rgba(190, 190, 190, 0.2);
-                border-radius: $radius;
                 width: 12.5%;
                 margin-left: 4px;
                 height: 100px;
@@ -78,13 +61,13 @@
         }
 
         .fade-out-graphs {
-            margin-top: $default_spacing;
+            margin-top: 1rem;
             height: 150px;
             overflow: hidden;
             position: relative;
 
             &::after {
-                @extend .mixin-gradient-overlay;
+                @extend %mixin-gradient-overlay;
                 width: calc(100% - 16px); // .ant-row gutter
                 left: 8px;
                 height: 150px;
@@ -98,7 +81,7 @@
             top: 16px;
             left: 50%;
             transform: translateX(-50%);
-            z-index: $z_content_overlay;
+            z-index: var(--z-content-overlay);
         }
     }
 }
@@ -115,8 +98,8 @@
 
     .dashboard-select {
         flex: 1;
-        @extend .text-ellipsis;
-        padding-right: $default_spacing * 2;
+        @extend %mixin-text-ellipsis;
+        padding-right: 2rem;
 
         .ant-select-single {
             max-width: 100%;
@@ -147,11 +130,11 @@
             }
             &.ant-select-open {
                 .ant-select-arrow {
-                    color: rgba($text_default, 0.4);
+                    color: var(--depr-rgba-text-default-0-4);
                 }
             }
             .ant-select-arrow {
-                color: $text_default;
+                color: var(--text-default);
                 font-size: 14px;
             }
         }
@@ -174,7 +157,7 @@
     @media (max-width: 768px) {
         flex-direction: column;
         .dashboard-meta {
-            padding-top: $default_spacing;
+            padding-top: 1rem;
             justify-content: flex-end;
         }
     }
@@ -183,4 +166,21 @@
 #auto-refresh-check {
     padding: 5px 12px;
     cursor: pointer;
+}
+
+.CollaboratorRow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 2rem;
+    margin-top: 0.5rem;
+    padding-left: 0.5rem;
+}
+
+.CollaboratorRow__details {
+    display: flex;
+    align-items: center;
+    > span {
+        margin-right: 0.5rem;
+    }
 }
