@@ -82,10 +82,6 @@ export function BreakdownFilter({
           }
         : undefined
 
-    const isHistogramable = featureFlags[FEATURE_FLAGS.HISTOGRAM_INSIGHTS]
-        ? !useMultiBreakdown && breakdownArray.every((t) => getPropertyDefinition(t)?.is_numerical)
-        : false
-
     const tags = !breakdown_type
         ? []
         : breakdownArray.map((t, index) => {
