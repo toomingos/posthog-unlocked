@@ -981,7 +981,7 @@ export enum ChartDisplayType {
     WorldMap = 'WorldMap',
 }
 
-export type BreakdownType = 'cohort' | 'person' | 'event' | 'group'
+export type BreakdownType = 'cohort' | 'person' | 'event' | 'group' | 'session'
 export type IntervalType = 'hour' | 'day' | 'week' | 'month'
 export type SmoothingType = number
 
@@ -1427,6 +1427,10 @@ export interface PreflightStatus {
     opt_out_capture?: boolean
     posthog_version?: string
     email_service_available: boolean
+    slack_service: {
+        available: boolean
+        client_id?: string
+    }
     /** Whether PostHog is running in DEBUG mode. */
     is_debug?: boolean
     is_event_property_usage_enabled?: boolean

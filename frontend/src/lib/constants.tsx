@@ -110,7 +110,6 @@ export const FEATURE_FLAGS = {
     MULTI_DASHBOARD_INSIGHTS: 'multi-dashboard-insights', // owner: @pauldambra
     INSIGHT_ACTIVITY_LOG: '8545-insight-activity-log', // owner: @pauldambra
     FRONTEND_APPS: '9618-frontend-apps', // owner: @mariusandra
-    PROPERTY_FILTER_ON_DASHBOARD: 'property-filter-on-dashboard', // owner: @edscode
     EXPORT_DASHBOARD_INSIGHTS: 'export-dashboard-insights', // owner: @benjackwhite
     ONBOARDING_1_5: 'onboarding-1_5', // owner: @liyiy
     BREAKDOWN_ATTRIBUTION: 'breakdown-attribution', // owner: @neilkakkar
@@ -122,7 +121,6 @@ export const FEATURE_FLAGS = {
     FEATURE_FLAG_EXPERIENCE_CONTINUITY: 'feature-flag-experience-continuity', // owner: @neilkakkar
     EMBED_INSIGHTS: 'embed-insights', // owner: @mariusandra
     ASYNC_EXPORT_CSV_FOR_LIVE_EVENTS: 'ASYNC_EXPORT_CSV_FOR_LIVE_EVENTS', // owner: @pauldambra
-    HISTOGRAM_INSIGHTS: 'histogram-insights', // owner: @rcmarron
 }
 
 /** Which self-hosted plan's features are available with Cloud's "Standard" plan (aka card attached). */
