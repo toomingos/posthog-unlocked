@@ -738,6 +738,82 @@ class TestUpdateCache(APIBaseTest):
         insight.refresh_from_db()
         assert insight.refresh_attempt == 1
 
+    @patch("posthog.tasks.update_cache.statsd.gauge")
+    def test_never_refreshed_tiles_are_gauged(self, statsd_gauge: MagicMock) -> None:
+        dashboard = create_shared_dashboard(team=self.team, is_shared=True)
+        filter = {"events": [{"id": "$pageview"}]}
+        item = Insight.objects.create(filters=filter, team=self.team)
+        tile: DashboardTile = DashboardTile.objects.create(insight=item, dashboard=dashboard)
+
+        assert tile.last_refresh is None
+
+        update_cached_items()
+
+        statsd_gauge.assert_any_call("update_cache_queue.never_refreshed", 1)
+
+    @freeze_time("2022-12-01T13:54:00.000Z")
+    @patch("posthog.tasks.update_cache.statsd.gauge")
+    def test_refresh_age_of_tiles_is_gauged(self, statsd_gauge: MagicMock) -> None:
+        tile_one = self._a_dashboard_tile_with_known_last_refresh(datetime.now(pytz.utc) - timedelta(hours=1))
+        tile_two = self._a_dashboard_tile_with_known_last_refresh(datetime.now(pytz.utc) - timedelta(hours=0.5))
+
+        # should not gauge because no last_refresh
+        self._a_dashboard_tile_with_known_last_refresh(None)
+
+        update_cached_items()
+
+        statsd_gauge.assert_any_call(
+            "update_cache_queue.dashboards_lag",
+            3600,
+            tags={
+                "insight_id": tile_one.insight_id,
+                "dashboard_id": tile_one.dashboard_id,
+                "cache_key": tile_one.filters_hash,
+            },
+        )
+
+        statsd_gauge.assert_any_call(
+            "update_cache_queue.dashboards_lag",
+            1800,
+            tags={
+                "insight_id": tile_two.insight_id,
+                "dashboard_id": tile_two.dashboard_id,
+                "cache_key": tile_two.filters_hash,
+            },
+        )
+
+        # the tile with no last refresh isn't gauged for lag
+        lag_calls = [
+            x.args[0]
+            for x in statsd_gauge.mock_calls
+            if len(x.args) > 0 and x.args[0] == "update_cache_queue.dashboards_lag"
+        ]
+        assert len(lag_calls) == 2
+
+    @patch("posthog.tasks.update_cache.statsd.incr")
+    def test_update_insight_cache_reports_on_updating_tiles_with_no_hash(self, statsd_incr: MagicMock) -> None:
+        tile = self._a_dashboard_tile_with_known_last_refresh(last_refresh_date=None)
+        # can't set filters_hash=None on a route that triggers save
+        DashboardTile.objects.filter(id=tile.id).update(filters_hash=None)
+        tile.refresh_from_db()
+        assert tile.filters_hash is None
+
+        update_insight_cache(tile.insight, tile.dashboard)
+
+        statsd_incr.assert_any_call("update_cache_queue.set_missing_filters_hash", 1)
+
+        tile.refresh_from_db()
+        assert tile.filters_hash is not None
+
+    def _a_dashboard_tile_with_known_last_refresh(self, last_refresh_date: Optional[datetime]) -> DashboardTile:
+        dashboard = create_shared_dashboard(team=self.team, is_shared=True)
+        filter = {"events": [{"id": "$pageview"}]}
+        item = Insight.objects.create(filters=filter, team=self.team)
+        tile: DashboardTile = DashboardTile.objects.create(insight=item, dashboard=dashboard)
+        tile.last_refresh = last_refresh_date
+        tile.save(update_fields=["last_refresh"])
+        return tile
+
     def _create_insight_with_known_cache_key(self, test_hash: str) -> Insight:
         filter_dict: Dict[str, Any] = {
             "events": [{"id": "$pageview"}],
