@@ -4,9 +4,8 @@ import { AsyncMigrationModalProps, asyncMigrationsLogic } from 'scenes/instance/
 import { LemonModal } from 'lib/components/LemonModal/LemonModal'
 import { LemonButton } from 'lib/components/LemonButton'
 import { asyncMigrationParameterFormLogic } from 'scenes/instance/AsyncMigrations/asyncMigrationParameterFormLogic'
-import { Field } from 'kea-forms'
+import { Field, Form } from 'kea-forms'
 import { LemonInput } from 'lib/components/LemonInput/LemonInput'
-import { VerticalForm } from 'lib/forms/VerticalForm'
 import { AnimatedCollapsible } from 'lib/components/AnimatedCollapsible'
 
 export function AsyncMigrationParametersModal(props: AsyncMigrationModalProps): JSX.Element {
@@ -15,7 +14,7 @@ export function AsyncMigrationParametersModal(props: AsyncMigrationModalProps): 
     const [collapsed, setCollapsed] = useState(true)
 
     return (
-        <VerticalForm
+        <Form
             logic={asyncMigrationParameterFormLogic}
             props={props}
             formKey="parameters"
@@ -33,7 +32,7 @@ export function AsyncMigrationParametersModal(props: AsyncMigrationModalProps): 
                             form="async-migration-parameters-form"
                             type="secondary"
                             data-attr="async-migration-parameters-cancel"
-                            style={{ marginRight: '0.5rem' }}
+                            className="mr-2"
                             onClick={closeAsyncMigrationsModal}
                         >
                             Cancel
@@ -73,6 +72,6 @@ export function AsyncMigrationParametersModal(props: AsyncMigrationModalProps): 
                     ))}
                 </AnimatedCollapsible>
             </LemonModal>
-        </VerticalForm>
+        </Form>
     )
 }

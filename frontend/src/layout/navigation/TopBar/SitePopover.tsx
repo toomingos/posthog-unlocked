@@ -64,8 +64,8 @@ function AccountInfo(): JSX.Element {
                     to={urls.mySettings()}
                     onClick={closeSitePopover}
                     data-attr="top-menu-item-me"
-                    type="stealth"
-                    icon={<IconSettings style={{ fontSize: '1.4rem' }} />}
+                    status="stealth"
+                    icon={<IconSettings className="text-2xl" />}
                 />
             </Tooltip>
         </div>
@@ -87,7 +87,7 @@ function CurrentOrganization({ organization }: { organization: OrganizationBasic
                         to={urls.organizationSettings()}
                         onClick={closeSitePopover}
                         data-attr="top-menu-item-org-settings"
-                        type="stealth"
+                        status="stealth"
                         icon={<IconSettings />}
                     />
                 </Tooltip>
@@ -98,7 +98,7 @@ function CurrentOrganization({ organization }: { organization: OrganizationBasic
 
 export function InviteMembersButton({
     center = false,
-    type = 'default',
+    type = 'tertiary',
 }: {
     center?: boolean
     type?: LemonButtonPropsBase['type']
@@ -256,11 +256,7 @@ function InstanceSettings(): JSX.Element | null {
 
     return (
         <Link to={urls.instanceSettings()}>
-            <LemonButton
-                icon={<IconCorporate style={{ color: 'var(--primary)' }} />}
-                onClick={closeSitePopover}
-                fullWidth
-            >
+            <LemonButton icon={<IconCorporate className="text-primary" />} onClick={closeSitePopover} fullWidth>
                 Instance settings
             </LemonButton>
         </Link>
@@ -271,7 +267,7 @@ function SignOutButton(): JSX.Element {
     const { logout } = useActions(userLogic)
 
     return (
-        <LemonButton onClick={logout} icon={<IconLogout />} type="stealth" fullWidth data-attr="top-menu-item-logout">
+        <LemonButton onClick={logout} icon={<IconLogout />} status="stealth" fullWidth data-attr="top-menu-item-logout">
             Sign out
         </LemonButton>
     )
@@ -315,8 +311,12 @@ export function SitePopover(): JSX.Element {
                     </SitePopoverSection>
                     {(otherOrganizations.length > 0 || preflight?.can_create_org) && (
                         <SitePopoverSection title="Other organizations">
-                            {otherOrganizations.map((otherOrganization) => (
-                                <OtherOrganizationButton key={otherOrganization.id} organization={otherOrganization} />
+                            {otherOrganizations.map((otherOrganization, i) => (
+                                <OtherOrganizationButton
+                                    key={otherOrganization.id}
+                                    organization={otherOrganization}
+                                    index={i + 2}
+                                />
                             ))}
                             {preflight?.can_create_org && <NewOrganizationButton />}
                         </SitePopoverSection>

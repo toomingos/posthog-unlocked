@@ -5,7 +5,7 @@ import { addToDashboardModalLogic } from 'lib/components/AddToDashboard/addToDas
 import { insightLogic } from 'scenes/insights/insightLogic'
 import { urls } from 'scenes/urls'
 import './AddToDashboard.scss'
-import { IconMagnifier, IconCottage } from 'lib/components/icons'
+import { IconCottage } from 'lib/components/icons'
 import { LemonInput } from 'lib/components/LemonInput/LemonInput'
 import { List, ListRowProps, ListRowRenderer } from 'react-virtualized/dist/es/List'
 import { AutoSizer } from 'react-virtualized/dist/es/AutoSizer'
@@ -51,22 +51,18 @@ const DashboardRelationRow = ({
     const { currentTeam } = useValues(teamLogic)
     const isPrimary = dashboard.id === currentTeam?.primary_dashboard
     return (
-        <div style={style} className={clsx('modal-row', isHighlighted && 'highlighted')}>
-            <span>
-                <Link to={urls.dashboard(dashboard.id)}>{dashboard.name || 'Untitled'}</Link>
-                {isPrimary && (
-                    <Tooltip title="Primary dashboards are shown on the project home page">
-                        <IconCottage
-                            style={{
-                                marginLeft: 6,
-                                color: 'var(--warning)',
-                                fontSize: '1rem',
-                                verticalAlign: '-0.125em',
-                            }}
-                        />
-                    </Tooltip>
-                )}
-            </span>
+        <div
+            data-attr="dashboard-list-item"
+            style={style}
+            className={clsx('flex items-center space-x-2', isHighlighted && 'highlighted')}
+        >
+            <Link to={urls.dashboard(dashboard.id)}>{dashboard.name || 'Untitled'}</Link>
+            {isPrimary && (
+                <Tooltip title="Primary dashboards are shown on the project home page">
+                    <IconCottage className="text-warning text-base" />
+                </Tooltip>
+            )}
+            <span className="grow" />
             <LemonButton
                 type={isAlreadyOnDashboard ? 'primary' : 'secondary'}
                 loading={dashboardWithActiveAPICall === dashboard.id}
@@ -129,10 +125,9 @@ export function AddToDashboardModal({
                 <h5>Add to dashboard</h5>
                 <LemonInput
                     data-attr="dashboard-searchfield"
+                    type="search"
                     placeholder={`Search for dashboards...`}
                     value={searchQuery}
-                    className={searchQuery && 'LemonInput--with-input'}
-                    icon={<IconMagnifier />}
                     onChange={(newValue) => setSearchQuery(newValue)}
                 />
                 <div className={'existing-links-info'}>
@@ -155,19 +150,14 @@ export function AddToDashboardModal({
                     </AutoSizer>
                 </div>
             </section>
-            <section className="flex justify-between">
+            <footer className="flex justify-between mt-4">
                 <LemonButton type="secondary" size="small" onClick={addNewDashboard} disabled={!canEditInsight}>
                     Add to a new dashboard
                 </LemonButton>
-                <LemonButton
-                    type="secondary"
-                    size="small"
-                    onClick={closeModal}
-                    style={{ marginTop: 0 }} /* lemon section styling was adding a margin top */
-                >
+                <LemonButton type="secondary" size="small" onClick={closeModal}>
                     Close
                 </LemonButton>
-            </section>
+            </footer>
         </LemonModal>
     )
 }
