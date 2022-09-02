@@ -86,10 +86,12 @@ $colors: (
     'muted-alt-dark': #515871,
     'white': #fff,
     'light': rgba(255, 255, 255, 0.878),
+    'side': #fafaf9,
     'border': rgba(0, 0, 0, 0.15),
     'border-light': rgba(0, 0, 0, 0.08),
     'border-dark': rgba(0, 0, 0, 0.24),
     'border-active': rgba(0, 0, 0, 0.36),
+    'transparent': transparent,
 );
 
 // These vars are modified via SCSS for legacy reasons (e.g. darken/lighten), so keeping as SCSS vars for now.
@@ -113,8 +115,10 @@ $_lifecycle_dormant: #f86234;
     --primary-bg-hover: var(--primary-highlight);
     --primary-bg-active: #{$_primary_bg_active};
 
+    // Special case color for primary buttons with a nested primary button
+    --primary-button-nested-hover: #d2dbff;
+
     --bg-mid: #f2f2f2;
-    --bg-side: #fafaf9;
     --bg-depth: #0f0f0f;
     --bg-navy: var(--primary-alt);
     --bg-charcoal: #2d2d2d;
@@ -235,6 +239,7 @@ $_lifecycle_dormant: #f86234;
     // Update and override from react-toastify
     // which attaches these variables to :root
     // which means they aren't available in the toolbar
+    --toastify-color-light: #fff;
     --toastify-color-info: var(--primary);
     --toastify-color-success: var(--success);
     --toastify-color-warning: var(--warning);
@@ -243,6 +248,10 @@ $_lifecycle_dormant: #f86234;
     --toastify-toast-width: 26rem;
     --toastify-toast-min-height: 3.5rem;
     --toastify-toast-max-height: 16rem;
+    --toastify-text-color-light: #757575;
+    --toastify-color-progress-success: var(--toastify-color-success);
+    --toastify-color-progress-warning: var(--toastify-color-warning);
+    --toastify-color-progress-error: var(--toastify-color-error);
 
     //In App Prompts
     --in-app-prompts-width: 26rem;
