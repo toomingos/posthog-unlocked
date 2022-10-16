@@ -59,6 +59,7 @@ import {
 } from '../../types'
 import { parseRawClickHouseEvent } from '../event'
 import { instrumentQuery } from '../metrics'
+import { status } from '../status'
 import {
     castTimestampOrNow,
     escapeClickHouseString,
@@ -1359,7 +1360,23 @@ export class DB {
             instance_id: instanceId.toString(),
         }
 
+        if (parsedEntry.message.length > 50_000) {
+            const { message, ...rest } = parsedEntry
+            status.warn('⚠️', 'Plugin log entry too long, ignoring.', rest)
+            this.statsd?.increment('logs.entries_too_large', {
+                source,
+                team_id: pluginConfig.team_id.toString(),
+                plugin_id: pluginConfig.plugin_id.toString(),
+            })
+            return
+        }
+
         this.statsd?.increment(`logs.entries_created`, {
+            source,
+            team_id: pluginConfig.team_id.toString(),
+            plugin_id: pluginConfig.plugin_id.toString(),
+        })
+        this.statsd?.increment('logs.entries_size', {
             source,
             team_id: pluginConfig.team_id.toString(),
             plugin_id: pluginConfig.plugin_id.toString(),
@@ -1369,7 +1386,7 @@ export class DB {
             await this.kafkaProducer.queueSingleJsonMessage(KAFKA_PLUGIN_LOG_ENTRIES, parsedEntry.id, parsedEntry)
         } catch (e) {
             captureException(e)
-            console.error(e)
+            console.error('Failed to produce message', e, parsedEntry)
         }
     }
 
@@ -1944,9 +1961,9 @@ export class DB {
 
     public async setPluginTranspiled(pluginId: Plugin['id'], filename: string, transpiled: string): Promise<void> {
         await this.postgresQuery(
-            `INSERT INTO posthog_pluginsourcefile (id, plugin_id, filename, status, transpiled) VALUES($1, $2, $3, $4, $5)
+            `INSERT INTO posthog_pluginsourcefile (id, plugin_id, filename, status, transpiled, updated_at) VALUES($1, $2, $3, $4, $5, NOW())
                 ON CONFLICT ON CONSTRAINT unique_filename_for_plugin
-                DO UPDATE SET status = $4, transpiled = $5, error = NULL`,
+                DO UPDATE SET status = $4, transpiled = $5, error = NULL, updated_at = NOW()`,
             [new UUIDT().toString(), pluginId, filename, PluginSourceFileStatus.Transpiled, transpiled],
             'setPluginTranspiled'
         )
@@ -1954,9 +1971,9 @@ export class DB {
 
     public async setPluginTranspiledError(pluginId: Plugin['id'], filename: string, error: string): Promise<void> {
         await this.postgresQuery(
-            `INSERT INTO posthog_pluginsourcefile (id, plugin_id, filename, status, error) VALUES($1, $2, $3, $4, $5)
+            `INSERT INTO posthog_pluginsourcefile (id, plugin_id, filename, status, error, updated_at) VALUES($1, $2, $3, $4, $5, NOW())
                 ON CONFLICT ON CONSTRAINT unique_filename_for_plugin
-                DO UPDATE SET status = $4, error = $5, transpiled = NULL`,
+                DO UPDATE SET status = $4, error = $5, transpiled = NULL, updated_at = NOW()`,
             [new UUIDT().toString(), pluginId, filename, PluginSourceFileStatus.Error, error],
             'setPluginTranspiledError'
         )
@@ -1964,9 +1981,9 @@ export class DB {
 
     public async getPluginTranspilationLock(pluginId: Plugin['id'], filename: string): Promise<boolean> {
         const response = await this.postgresQuery(
-            `INSERT INTO posthog_pluginsourcefile (id, plugin_id, filename, status, transpiled) VALUES($1, $2, $3, $4, NULL)
+            `INSERT INTO posthog_pluginsourcefile (id, plugin_id, filename, status, transpiled, updated_at) VALUES($1, $2, $3, $4, NULL, NOW())
                 ON CONFLICT ON CONSTRAINT unique_filename_for_plugin
-                DO UPDATE SET status = $4 WHERE (posthog_pluginsourcefile.status IS NULL OR posthog_pluginsourcefile.status = $5) RETURNING status`,
+                DO UPDATE SET status = $4, updated_at = NOW() WHERE (posthog_pluginsourcefile.status IS NULL OR posthog_pluginsourcefile.status = $5) RETURNING status`,
             [new UUIDT().toString(), pluginId, filename, PluginSourceFileStatus.Locked, ''],
             'getPluginTranspilationLock'
         )

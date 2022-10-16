@@ -211,7 +211,8 @@ export const eventUsageLogic = kea<eventUsageLogicType>({
         reportEventsTablePollingReactedToPageVisibility: (pageIsVisible: boolean) => ({ pageIsVisible }),
         reportAnnotationViewed: (annotations: AnnotationType[] | null) => ({ annotations }),
         reportPersonDetailViewed: (person: PersonType) => ({ person }),
-        reportInsightCreated: (insight: InsightType | null) => ({ insight }),
+        reportInsightCreated: (insightType: InsightType | null) => ({ insightType }),
+        reportInsightSaved: (filters: Partial<FilterType>, isNewInsight: boolean) => ({ filters, isNewInsight }),
         reportInsightViewed: (
             insightModel: Partial<InsightModel>,
             filters: Partial<FilterType>,
@@ -469,8 +470,12 @@ export const eventUsageLogic = kea<eventUsageLogicType>({
             dashboardId,
         }),
         reportInstanceSettingChange: (name: string, value: string | boolean | number) => ({ name, value }),
+        reportAxisUnitsChanged: (properties: Record<string, any>) => ({ ...properties }),
     },
     listeners: ({ values }) => ({
+        reportAxisUnitsChanged: (properties) => {
+            posthog.capture('axis units changed', properties)
+        },
         reportInstanceSettingChange: ({ name, value }) => {
             posthog.capture('instance setting change', { name, value })
         },
@@ -535,9 +540,14 @@ export const eventUsageLogic = kea<eventUsageLogicType>({
             }
             posthog.capture('person viewed', properties)
         },
-        reportInsightCreated: async ({ insight }, breakpoint) => {
+        reportInsightCreated: async ({ insightType }, breakpoint) => {
+            // "insight created" essentially means that the user clicked "New insight"
             await breakpoint(500) // Debounce to avoid multiple quick "New insight" clicks being reported
-            posthog.capture('insight created', { insight })
+            posthog.capture('insight created', { insight: insightType })
+        },
+        reportInsightSaved: async ({ filters, isNewInsight }) => {
+            // "insight saved" is a proxy for the new insight's results being valuable to the user
+            posthog.capture('insight saved', { ...filters, is_new_insight: isNewInsight })
         },
         reportInsightViewed: ({
             insightModel,
@@ -612,7 +622,7 @@ export const eventUsageLogic = kea<eventUsageLogicType>({
             }
             properties.compare = filters.compare // "Compare previous" option
             properties.mode = insightMode // View or edit
-
+            properties.show_legend = filters.show_legend
             properties.viewer_is_creator = insightModel.created_by?.uuid === values.user?.uuid ?? null // `null` means we couldn't determine this
             properties.is_saved = insightModel.saved
             properties.description_length = insightModel.description?.length ?? 0
@@ -638,21 +648,29 @@ export const eventUsageLogic = kea<eventUsageLogicType>({
                 pinned,
                 creation_mode,
                 sample_items_count: 0,
-                item_count: dashboard.items?.length || 0,
+                item_count: dashboard.tiles?.length || 0,
                 created_by_system: !dashboard.created_by,
                 dashboard_id: id,
                 lastRefreshed: lastRefreshed?.toISOString(),
                 refreshAge: lastRefreshed ? now().diff(lastRefreshed, 'seconds') : undefined,
             }
 
-            for (const item of dashboard.items || []) {
-                const key = `${item.filters?.insight?.toLowerCase() || InsightType.TRENDS}_count`
-                if (!properties[key]) {
-                    properties[key] = 1
+            for (const item of dashboard.tiles || []) {
+                if (!!item.insight) {
+                    const key = `${item.insight.filters?.insight?.toLowerCase() || InsightType.TRENDS}_count`
+                    if (!properties[key]) {
+                        properties[key] = 1
+                    } else {
+                        properties[key] += 1
+                    }
+                    properties.sample_items_count += item.insight.is_sample ? 1 : 0
                 } else {
-                    properties[key] += 1
+                    if (!properties['text_tiles_count']) {
+                        properties['text_tiles_count'] = 1
+                    } else {
+                        properties['text_tiles_count'] += 1
+                    }
                 }
-                properties.sample_items_count += item.is_sample ? 1 : 0
             }
 
             const eventName = delay ? 'dashboard analyzed' : 'viewed dashboard' // `viewed dashboard` name is kept for backwards compatibility

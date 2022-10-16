@@ -21,13 +21,13 @@ import 'chartjs-adapter-dayjs-3'
 import { areObjectValuesEmpty, lightenDarkenColor } from '~/lib/utils'
 import { getBarColorFromStatus, getGraphColors, getSeriesColor } from 'lib/colors'
 import { AnnotationsOverlay } from 'lib/components/AnnotationsOverlay'
-import { GraphDataset, GraphPoint, GraphPointPayload, GraphType, InsightType } from '~/types'
+import { FilterType, GraphDataset, GraphPoint, GraphPointPayload, GraphType, InsightType } from '~/types'
 import { InsightTooltip } from 'scenes/insights/InsightTooltip/InsightTooltip'
 import { lineGraphLogic } from 'scenes/insights/views/LineGraph/lineGraphLogic'
 import { TooltipConfig } from 'scenes/insights/InsightTooltip/insightTooltipUtils'
 import { groupsModel } from '~/models/groupsModel'
 import { ErrorBoundary } from '~/layout/ErrorBoundary'
-import { AggregationAxisFormat, formatAggregationAxisValue } from 'scenes/insights/aggregationAxisFormat'
+import { formatAggregationAxisValue } from 'scenes/insights/aggregationAxisFormat'
 import { insightLogic } from 'scenes/insights/insightLogic'
 import { useResizeObserver } from 'lib/hooks/useResizeObserver'
 import { PieChart } from 'scenes/insights/views/LineGraph/PieChart'
@@ -48,7 +48,7 @@ export interface LineGraphProps {
     isCompare?: boolean
     incompletenessOffsetFromEnd?: number // Number of data points at end of dataset to replace with a dotted line. Only used in line graphs.
     labelGroupType: number | 'people' | 'none'
-    aggregationAxisFormat?: AggregationAxisFormat
+    filters?: Partial<FilterType>
 }
 
 export function ensureTooltipElement(): HTMLElement {
@@ -165,6 +165,27 @@ export function onChartHover(
     }
 }
 
+export const filterNestedDataset = (
+    hiddenLegendKeys: Record<string | number, boolean | undefined> | undefined,
+    datasets: GraphDataset[]
+): GraphDataset[] => {
+    if (!hiddenLegendKeys) {
+        return datasets
+    }
+    // If series are nested (for ActionsHorizontalBar and Pie), filter out the series by index
+    const filterFn = (_: any, i: number): boolean => !hiddenLegendKeys?.[i]
+    return datasets.map((_data) => {
+        // Performs a filter transformation on properties that contain arrayed data
+        return Object.fromEntries(
+            Object.entries(_data).map(([key, val]) =>
+                Array.isArray(val) && val.length === datasets?.[0]?.actions?.length
+                    ? [key, val?.filter(filterFn)]
+                    : [key, val]
+            )
+        ) as GraphDataset
+    })
+}
+
 export function LineGraph_({
     datasets: _datasets,
     hiddenLegendKeys,
@@ -178,7 +199,7 @@ export function LineGraph_({
     incompletenessOffsetFromEnd = -1,
     tooltip: tooltipConfig,
     labelGroupType,
-    aggregationAxisFormat = 'numeric',
+    filters,
 }: LineGraphProps): JSX.Element {
     let datasets = _datasets
 
@@ -242,18 +263,7 @@ export function LineGraph_({
         // Hide intentionally hidden keys
         if (!areObjectValuesEmpty(hiddenLegendKeys)) {
             if (isHorizontal) {
-                // If series are nested (for ActionsHorizontalBar and Pie), filter out the series by index
-                const filterFn = (_: any, i: number): boolean => !hiddenLegendKeys?.[i]
-                datasets = datasets.map((_data) => {
-                    // Performs a filter transformation on properties that contain arrayed data
-                    return Object.fromEntries(
-                        Object.entries(_data).map(([key, val]) =>
-                            Array.isArray(val) && val.length === datasets?.[0]?.actions?.length
-                                ? [key, val?.filter(filterFn)]
-                                : [key, val]
-                        )
-                    ) as GraphDataset
-                })
+                datasets = filterNestedDataset(hiddenLegendKeys, datasets)
             } else {
                 datasets = datasets.filter((data) => !hiddenLegendKeys?.[data.id])
             }
@@ -361,8 +371,7 @@ export function LineGraph_({
                                     hideColorCol={isHorizontal || !!tooltipConfig?.hideColorCol}
                                     renderCount={
                                         tooltipConfig?.renderCount ||
-                                        ((value: number): string =>
-                                            formatAggregationAxisValue(aggregationAxisFormat, value))
+                                        ((value: number): string => formatAggregationAxisValue(filters, value))
                                     }
                                     forceEntitiesAsColumns={isHorizontal}
                                     hideInspectActorsSection={!onClick || !showPersonsModal}
@@ -447,7 +456,7 @@ export function LineGraph_({
                         precision: 0,
                         color: colors.axisLabel as string,
                         callback: (value) => {
-                            return formatAggregationAxisValue(aggregationAxisFormat, value)
+                            return formatAggregationAxisValue(filters, value)
                         },
                     },
                 },
@@ -472,7 +481,7 @@ export function LineGraph_({
                         precision: 0,
                         ...tickOptions,
                         callback: (value) => {
-                            return formatAggregationAxisValue(aggregationAxisFormat, value)
+                            return formatAggregationAxisValue(filters, value)
                         },
                     },
                     grid: {
@@ -489,7 +498,7 @@ export function LineGraph_({
                         ...tickOptions,
                         precision: 0,
                         callback: (value) => {
-                            return formatAggregationAxisValue(aggregationAxisFormat, value)
+                            return formatAggregationAxisValue(filters, value)
                         },
                     },
                 },

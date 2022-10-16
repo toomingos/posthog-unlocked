@@ -27,6 +27,8 @@ import { SortableHandle as sortableHandle } from 'react-sortable-hoc'
 import { SortableDragIcon } from 'lib/components/icons'
 import { LemonButton, LemonButtonWithPopup } from 'lib/components/LemonButton'
 import { LemonSelect, LemonSelectSection } from '@posthog/lemon-ui'
+import { featureFlagLogic } from 'lib/logic/featureFlagLogic'
+import { FEATURE_FLAGS } from 'lib/constants'
 
 const DragHandle = sortableHandle(() => (
     <span className="ActionFilterRowDragHandle">
@@ -44,6 +46,7 @@ export interface ActionFilterRowProps {
     logic: typeof entityFilterLogic
     filter: ActionFilter
     index: number
+    typeKey: string
     mathAvailability: MathAvailability
     singleFilter?: boolean
     hideFilter?: boolean // Hides the local filter options
@@ -85,6 +88,7 @@ export function ActionFilterRow({
     logic,
     filter,
     index,
+    typeKey,
     mathAvailability,
     singleFilter,
     hideFilter,
@@ -118,6 +122,7 @@ export function ActionFilterRow({
     } = useActions(logic)
     const { actions } = useValues(actionsModel)
     const { mathDefinitions } = useValues(mathsLogic)
+    const { featureFlags } = useValues(featureFlagLogic)
 
     const propertyFiltersVisible = typeof filter.order === 'number' ? entityFilterVisible[filter.order] : false
 
@@ -315,6 +320,9 @@ export function ActionFilterRow({
                                                 groupType={TaxonomicFilterGroupType.NumericalEventProperties}
                                                 groupTypes={[
                                                     TaxonomicFilterGroupType.NumericalEventProperties,
+                                                    ...(featureFlags[FEATURE_FLAGS.EVENT_COUNT_PER_ACTOR]
+                                                        ? [TaxonomicFilterGroupType.EventCount]
+                                                        : []),
                                                     TaxonomicFilterGroupType.Sessions,
                                                 ]}
                                                 value={mathProperty}
@@ -366,7 +374,7 @@ export function ActionFilterRow({
             {propertyFiltersVisible && (
                 <div className={`ActionFilterRow-filters`}>
                     <PropertyFilters
-                        pageKey={`${index}-${value}-filter`}
+                        pageKey={`${index}-${value}-${typeKey}-filter`}
                         propertyFilters={filter.properties}
                         onChange={(properties) => updateFilterProperty({ properties, index })}
                         style={{ margin: 0 }}
