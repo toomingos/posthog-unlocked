@@ -118,7 +118,6 @@ class TrendsActors(ActorBaseQuery):
             entity=self.entity,
             should_join_distinct_ids=not self.is_aggregating_by_groups
             and not self._team.actor_on_events_querying_enabled,
-            # TODO: this fails on sessions because `$session_id` also comes from the event query, causing ambiguity :$
             extra_event_properties=["$window_id", "$session_id"] if self._filter.include_recordings else [],
             extra_fields=extra_fields,
             using_person_on_events=self._team.actor_on_events_querying_enabled,
