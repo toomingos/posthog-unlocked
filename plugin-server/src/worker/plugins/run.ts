@@ -36,6 +36,7 @@ export async function runOnEvent(hub: Hub, event: ProcessedPluginEvent): Promise
                                 pluginConfigId: pluginConfig.id,
                                 category: 'onEvent',
                             },
+                            appMetricErrorContext: { event },
                         })
                 )
             )
@@ -114,12 +115,18 @@ export async function runProcessEvent(hub: Hub, event: PluginEvent): Promise<Plu
                     teamId: String(event.team_id),
                 })
                 pluginsFailed.push(`${pluginConfig.plugin?.name} (${pluginConfig.id})`)
-                await hub.appMetrics.queueMetric({
-                    teamId,
-                    pluginConfigId: pluginConfig.id,
-                    category: 'processEvent',
-                    failures: 1,
-                })
+                await hub.appMetrics.queueError(
+                    {
+                        teamId,
+                        pluginConfigId: pluginConfig.id,
+                        category: 'processEvent',
+                        failures: 1,
+                    },
+                    {
+                        error,
+                        event,
+                    }
+                )
             }
             hub.statsd?.timing(`plugin.process_event`, timer, {
                 plugin: pluginConfig.plugin?.name ?? '?',
@@ -160,14 +167,18 @@ export async function runPluginTask(
     const timer = new Date()
     let response
     const pluginConfig = hub.pluginConfigs.get(pluginConfigId)
-    const teamIdStr = pluginConfig?.team_id.toString() || '?'
+    const teamId = pluginConfig?.team_id
+    let shouldQueueAppMetric = false
+
     try {
         const task = await pluginConfig?.vm?.getTask(taskName, taskType)
         if (!task) {
             throw new Error(
-                `Task "${taskName}" not found for plugin "${pluginConfig?.plugin?.name}" with config id ${pluginConfig}`
+                `Task "${taskName}" not found for plugin "${pluginConfig?.plugin?.name}" with config id ${pluginConfigId}`
             )
         }
+
+        shouldQueueAppMetric = taskType === PluginTaskType.Schedule && !task.__ignoreForAppMetrics
         response = await instrument(
             hub.statsd,
             {
@@ -181,6 +192,15 @@ export async function runPluginTask(
             },
             () => (payload ? task?.exec(payload) : task?.exec())
         )
+
+        if (shouldQueueAppMetric && teamId) {
+            await hub.appMetrics.queueMetric({
+                teamId: teamId,
+                pluginConfigId: pluginConfigId,
+                category: 'scheduledTask',
+                successes: 1,
+            })
+        }
     } catch (error) {
         await processError(hub, pluginConfig || null, error)
 
@@ -188,12 +208,24 @@ export async function runPluginTask(
             taskType: taskType,
             taskName: taskName,
             pluginConfigId: pluginConfigId.toString(),
-            teamId: teamIdStr,
+            teamId: teamId?.toString() ?? '?',
         })
+
+        if (shouldQueueAppMetric && teamId) {
+            await hub.appMetrics.queueError(
+                {
+                    teamId: teamId,
+                    pluginConfigId: pluginConfigId,
+                    category: 'scheduledTask',
+                    failures: 1,
+                },
+                { error }
+            )
+        }
     }
     hub.statsd?.timing(`plugin.task`, timer, {
         plugin: pluginConfig?.plugin?.name ?? '?',
-        teamId: teamIdStr,
+        teamId: teamId?.toString() ?? '?',
     })
     return response
 }

@@ -1,4 +1,3 @@
-import React from 'react'
 import { dayjs } from 'lib/dayjs'
 import { useActions, useValues } from 'kea'
 
@@ -21,7 +20,7 @@ interface RecordingRowProps {
     recording: SessionRecordingType
 }
 
-function RecordingRow({ recording }: RecordingRowProps): JSX.Element {
+export function RecordingRow({ recording }: RecordingRowProps): JSX.Element {
     const { openSessionPlayer } = useActions(sessionPlayerModalLogic)
     const { reportRecordingOpenedFromRecentRecordingList } = useActions(eventUsageLogic)
 

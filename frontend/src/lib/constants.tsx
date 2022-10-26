@@ -95,10 +95,6 @@ export enum ShownAsValue {
 export const RETENTION_RECURRING = 'retention_recurring'
 export const RETENTION_FIRST_TIME = 'retention_first_time'
 
-// Properties constants
-export const PROPERTY_MATH_TYPE = 'property'
-export const EVENT_MATH_TYPE = 'event'
-
 export const WEBHOOK_SERVICES: Record<string, string> = {
     Slack: 'slack.com',
     Discord: 'discord.com',
@@ -115,20 +111,14 @@ export const FEATURE_FLAGS = {
     RETENTION_BREAKDOWN: 'retention-breakdown', // owner: @hazzadous
     WEB_PERFORMANCE: 'hackathon-apm', //owner: @pauldambra
     NEW_INSIGHT_COHORTS: '7569-insight-cohorts', // owner: @EDsCODE
-    SESSION_CONSOLE: 'session-recording-console', // owner: @timgl
     SMOOTHING_INTERVAL: 'smoothing-interval', // owner: @timgl
     BILLING_LIMIT: 'billing-limit', // owner: @timgl
     KAFKA_INSPECTOR: 'kafka-inspector', // owner: @yakkomajuri
     INSIGHT_EDITOR_PANELS: '8929-insight-editor-panels', // owner: @mariusandra
-    FRONTEND_APPS: '9618-frontend-apps', // owner: @mariusandra
-    TOOLBAR_LAUNCH_SIDE_ACTION: 'toolbar-launch-side-action', // owner: @pauldambra,
     BILLING_LOCK_EVERYTHING: 'billing-lock-everything', // owner @timgl
     CANCEL_RUNNING_QUERIES: 'cancel-running-queries', // owner @timgl
-    IN_APP_PROMPTS_EXPERIMENT: 'IN_APP_PROMPTS_EXPERIMENT', // owner: @kappa90
-    ALLOW_CSV_EXPORT_COLUMN_CHOICE: 'allow-csv-export-column-choice', //owner: @pauldambra
     HISTORICAL_EXPORTS_V2: 'historical-exports-v2', // owner @macobo
     ACTOR_ON_EVENTS_QUERYING: 'person-on-events-enabled', //owner: @EDsCODE
-    FEATURE_FLAGS_UX: 'feature-flags-ux', //owner: @liyiy
     REGION_SELECT: 'region-select', //owner: @kappa90
     INGESTION_WARNINGS_ENABLED: 'ingestion-warnings-enabled', // owner: @macobo
     HOG_BOOK: 'hog-book', // owner: @pauldambra
@@ -137,6 +127,9 @@ export const FEATURE_FLAGS = {
     SESSION_RESET_ON_LOAD: 'session-reset-on-load', // owner: @benjackwhite
     CURRENCY_UNITS: 'currency-units', // owner: @pauldambra
     APP_METRICS: 'app-metrics', // owner: @macobo
+    FEEDBACK_BUTTON: 'feedback-button', // owner: @luke
+    RECORDING_LIST_ICONS: 'recording-list-icons', // owner: @benjackwhite
+    RECORDINGS_ON_FEATURE_FLAGS: 'recordings-on-feature-flags', // owner: @EDsCODE
 }
 
 /** Which self-hosted plan's features are available with Cloud's "Standard" plan (aka card attached). */
@@ -172,8 +165,6 @@ export enum FunnelLayout {
 }
 
 export const BIN_COUNT_AUTO = 'auto' as const
-
-export const EVENT_COUNT_PER_ACTOR = '__event_count_per_actor' as const
 
 // Cohort types
 export enum CohortTypeEnum {

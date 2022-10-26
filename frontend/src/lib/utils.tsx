@@ -1,4 +1,4 @@
-import React, { CSSProperties, PropsWithChildren } from 'react'
+import { CSSProperties, PropsWithChildren } from 'react'
 import api from './api'
 import {
     ActionFilter,
@@ -830,11 +830,11 @@ const dateOptionsMap = {
 export function dateFilterToText(
     dateFrom: string | dayjs.Dayjs | null | undefined,
     dateTo: string | dayjs.Dayjs | null | undefined,
-    defaultValue: string,
+    defaultValue: string | null,
     dateOptions: DateMappingOption[] = dateMapping,
     isDateFormatted: boolean = false,
     dateFormat: string = DATE_FORMAT
-): string {
+): string | null {
     if (dayjs.isDayjs(dateFrom) && dayjs.isDayjs(dateTo)) {
         return formatDateRange(dateFrom, dateTo, dateFormat)
     }
@@ -1409,6 +1409,7 @@ export function convertPropertiesToPropertyGroup(
     return { type: FilterLogicalOperator.And, values: [] }
 }
 
+/** Flatten a filter group into an array of filters. NB: Logical operators (AND/OR) are lost in the process. */
 export function convertPropertyGroupToProperties(
     properties?: PropertyGroupFilter | AnyPropertyFilter[]
 ): PropertyFilter[] | undefined {

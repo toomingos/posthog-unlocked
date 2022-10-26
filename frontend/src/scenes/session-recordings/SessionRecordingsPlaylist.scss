@@ -1,9 +1,11 @@
 @import '../../styles/mixins';
+@import '../../styles/vars';
 
 .SessionRecordingsPlaylist {
     display: flex;
     flex-direction: column-reverse;
     gap: 1rem;
+    overflow: hidden;
 
     @include screen($md) {
         flex-direction: row;
@@ -19,6 +21,20 @@
             max-width: 500px;
         }
 
+        .SessionRecordingsPlaylist__list-item.SessionRecordingsPlaylist__list-item--unwatched {
+            &:after {
+                content: '';
+                width: 0;
+                height: 0;
+                border-style: solid;
+                border-width: 0 0.75rem 0.75rem 0;
+                border-color: transparent var(--primary-light) transparent transparent;
+                right: 0;
+                top: 0;
+                position: absolute;
+            }
+        }
+
         .SessionRecordingsPlaylist__pagination-control {
             margin-top: 1rem;
             display: flex;
@@ -29,6 +45,7 @@
     }
     .SessionRecordingsPlaylist__right-column {
         flex: 1;
+        overflow: hidden;
 
         .SessionRecordingsPlaylist__loading {
             display: flex;

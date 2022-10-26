@@ -95,6 +95,7 @@ CUSTOM_EVENT = "custom_event"
 
 DATE_FROM = "date_from"
 DATE_TO = "date_to"
+EXPLICIT_DATE = "explicit_date"
 ENTITIES = "entities"
 ACTIONS = "actions"
 EVENTS = "events"
@@ -220,10 +221,6 @@ class AnalyticsDBMS(str, Enum):
 UNIQUE_USERS = "dau"
 WEEKLY_ACTIVE = "weekly_active"
 MONTHLY_ACTIVE = "monthly_active"
-
-# Special math_property value indicating average event count per user instead of an event property
-# Two underscored signify that this is not any property
-EVENT_COUNT_PER_ACTOR = "__event_count_per_actor"
 
 
 class RetentionQueryType(str, Enum):

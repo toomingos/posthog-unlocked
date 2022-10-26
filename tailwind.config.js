@@ -180,7 +180,7 @@ module.exports = {
         // 'ringOffsetWidth', // The ring-offset-width utilities like ring-offset-2
         // 'ringOpacity', // The ring-opacity utilities like ring-opacity-50
         // 'ringWidth', // The ring-width utilities like ring-4
-        // 'rotate', // The rotate utilities like rotate-6
+        'rotate', // The rotate utilities like rotate-6
         // 'saturate', // The saturate utilities like saturate-100
         // 'scale', // The scale utilities like scale-x-95
         // 'scrollBehavior', // The scroll-behavior utilities like scroll-auto
@@ -221,6 +221,6 @@ module.exports = {
         'width', // The width utilities like w-1.5
         // 'willChange', // The will-change utilities like will-change-scroll
         // 'wordBreak', // The word-break utilities like break-words
-        // 'zIndex', // The z-index utilities like z-30
+        'zIndex', // The z-index utilities like z-30
     ],
 }

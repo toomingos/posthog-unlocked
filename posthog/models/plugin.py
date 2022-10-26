@@ -14,6 +14,7 @@ from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 from semantic_version.base import SimpleSpec, Version
 
+from posthog.cloud_utils import is_cloud
 from posthog.models.organization import Organization
 from posthog.models.signals import mutable_receiver
 from posthog.models.team import Team
@@ -98,7 +99,7 @@ def update_validated_data_from_url(validated_data: Dict[str, Any], url: str) -> 
         ):
             validated_data["plugin_type"] = Plugin.PluginType.CUSTOM
 
-    if posthog_version and not settings.MULTI_TENANCY:
+    if posthog_version and not is_cloud():
         try:
             spec = SimpleSpec(posthog_version.replace(" ", ""))
         except ValueError:
@@ -122,7 +123,6 @@ class PluginManager(models.Manager):
         plugin = Plugin.objects.create(**kwargs)
         if plugin_json:
             PluginSourceFile.objects.sync_from_plugin_archive(plugin, plugin_json)
-        reload_plugins_on_workers()
         return plugin
 
 
@@ -310,6 +310,8 @@ class PluginSourceFileManager(models.Manager):
             filenames_to_delete.append("index.ts")
         # Make sure files are gone
         PluginSourceFile.objects.filter(plugin=plugin, filename__in=filenames_to_delete).delete()
+        # Trigger plugin server reload and code transpilation
+        plugin.save()
         return plugin_json_instance, index_ts_instance, frontend_tsx_instance, site_ts_instance
 
 
@@ -396,7 +398,12 @@ def validate_plugin_job_payload(plugin: Plugin, job_type: str, payload: Dict[str
     for key, field_options in payload_spec.items():
         if field_options.get("required", False) and key not in payload:
             raise ValidationError(f"Missing required job field: {key}")
-        if field_options.get("staff_only", False) and not is_staff and key in payload:
+        if (
+            field_options.get("staff_only", False)
+            and not is_staff
+            and key in payload
+            and payload.get(key) != field_options.get("default")
+        ):
             raise ValidationError(f"Field is only settable for admins: {key}")
 
     for key in payload:
@@ -406,7 +413,7 @@ def validate_plugin_job_payload(plugin: Plugin, job_type: str, payload: Dict[str
 
 @receiver(models.signals.post_save, sender=Organization)
 def preinstall_plugins_for_new_organization(sender, instance: Organization, created: bool, **kwargs):
-    if created and not settings.MULTI_TENANCY and can_install_plugins(instance):
+    if created and not is_cloud() and can_install_plugins(instance):
         for plugin_url in settings.PLUGINS_PREINSTALLED_URLS:
             try:
                 Plugin.objects.install(

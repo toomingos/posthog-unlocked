@@ -2205,6 +2205,33 @@
       "contributions": [
         "code"
       ]
+    },
+    {
+      "login": "rcmarron",
+      "name": "Rick Marron",
+      "avatar_url": "https://avatars.githubusercontent.com/u/4813045?v=4",
+      "profile": "https://github.com/rcmarron",
+      "contributions": [
+        "code"
+      ]
+    },
+    {
+      "login": "ShaneMaglangit",
+      "name": "Shane Maglangit",
+      "avatar_url": "https://avatars.githubusercontent.com/u/53674742?v=4",
+      "profile": "http://shanemaglangit.com",
+      "contributions": [
+        "code"
+      ]
+    },
+    {
+      "login": "justinjones",
+      "name": "Justin Jones",
+      "avatar_url": "https://avatars.githubusercontent.com/u/14925?v=4",
+      "profile": "https://www.linkedin.com/in/justin-jones-1300b613b/",
+      "contributions": [
+        "code"
+      ]
     }
   ],
   "contributorsPerLine": 7,

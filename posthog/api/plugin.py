@@ -6,7 +6,7 @@ import requests
 from dateutil.relativedelta import relativedelta
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.files.uploadedfile import UploadedFile
-from django.db import connections
+from django.db import connections, transaction
 from django.db.models import Q
 from django.http import HttpResponse
 from django.utils.encoding import smart_str
@@ -41,6 +41,7 @@ from posthog.permissions import (
 )
 from posthog.plugins import can_configure_plugins, can_install_plugins, parse_url
 from posthog.plugins.access import can_globally_manage_plugins
+from posthog.queries.app_metrics.app_metrics import TeamPluginsDeliveryRateQuery
 from posthog.utils import format_query_params_absolute_url
 
 # Keep this in sync with: frontend/scenes/plugins/utils.ts
@@ -53,7 +54,7 @@ def _update_plugin_attachments(request: request.Request, plugin_config: PluginCo
         match = re.match(r"^add_attachment\[([^]]+)\]$", key)
         if match:
             _update_plugin_attachment(plugin_config, match.group(1), file, user)
-    for key, file in request.POST.items():
+    for key, _file in request.POST.items():
         match = re.match(r"^remove_attachment\[([^]]+)\]$", key)
         if match:
             _update_plugin_attachment(plugin_config, match.group(1), None, user)
@@ -297,6 +298,7 @@ class PluginViewSet(StructuredViewSetMixin, viewsets.ModelViewSet):
         Plugin.objects.filter(id=plugin.id).update(
             latest_tag=latest_url.get("tag", latest_url.get("version", None)), latest_tag_checked_at=now()
         )
+        plugin.refresh_from_db()
 
         return Response({"plugin": PluginSerializer(plugin).data})
 
@@ -333,7 +335,7 @@ class PluginViewSet(StructuredViewSetMixin, viewsets.ModelViewSet):
                     sources[key].error = None
                     sources[key].save()
         response: Dict[str, str] = {}
-        for key, source in sources.items():
+        for _, source in sources.items():
             response[source.filename] = source.source
 
         # Update values from plugin.json, if one exists
@@ -364,8 +366,9 @@ class PluginViewSet(StructuredViewSetMixin, viewsets.ModelViewSet):
         if plugin.plugin_type not in (Plugin.PluginType.SOURCE, Plugin.PluginType.LOCAL):
             validated_data: Dict[str, Any] = {}
             plugin_json = update_validated_data_from_url(validated_data, plugin.url)
-            serializer.update(plugin, validated_data)
-            PluginSourceFile.objects.sync_from_plugin_archive(plugin, plugin_json)
+            with transaction.atomic():
+                serializer.update(plugin, validated_data)
+                PluginSourceFile.objects.sync_from_plugin_archive(plugin, plugin_json)
         return Response(serializer.data)
 
     def destroy(self, request: request.Request, *args, **kwargs) -> Response:
@@ -437,11 +440,23 @@ class PluginViewSet(StructuredViewSetMixin, viewsets.ModelViewSet):
 class PluginConfigSerializer(serializers.ModelSerializer):
     config = serializers.SerializerMethodField()
     plugin_info = serializers.SerializerMethodField()
+    delivery_rate_24h = serializers.SerializerMethodField()
 
     class Meta:
         model = PluginConfig
-        fields = ["id", "plugin", "enabled", "order", "config", "error", "team_id", "plugin_info"]
-        read_only_fields = ["id", "team_id", "plugin_info"]
+        fields = [
+            "id",
+            "plugin",
+            "enabled",
+            "order",
+            "config",
+            "error",
+            "team_id",
+            "plugin_info",
+            "delivery_rate_24h",
+            "created_at",
+        ]
+        read_only_fields = ["id", "team_id", "plugin_info", "delivery_rate_24h", "created_at"]
 
     def get_config(self, plugin_config: PluginConfig):
         attachments = PluginAttachment.objects.filter(plugin_config=plugin_config).only(
@@ -480,6 +495,12 @@ class PluginConfigSerializer(serializers.ModelSerializer):
     def get_plugin_info(self, plugin_config: PluginConfig):
         if self.context["view"].action == "retrieve":
             return PluginSerializer(instance=plugin_config.plugin).data
+        else:
+            return None
+
+    def get_delivery_rate_24h(self, plugin_config: PluginConfig):
+        if "delivery_rates_1d" in self.context:
+            return self.context["delivery_rates_1d"].get(plugin_config.pk, None)
         else:
             return None
 
@@ -550,6 +571,12 @@ class PluginConfigViewSet(StructuredViewSetMixin, viewsets.ModelViewSet):
         if not can_configure_plugins(self.team.organization_id):
             return self.queryset.none()
         return super().get_queryset().order_by("order", "plugin_id")
+
+    def get_serializer_context(self) -> Dict[str, Any]:
+        context = super().get_serializer_context()
+        if context["view"].action in ("retrieve", "list"):
+            context["delivery_rates_1d"] = TeamPluginsDeliveryRateQuery(self.team).run()
+        return context
 
     # we don't really use this endpoint, but have something anyway to prevent team leakage
     def destroy(self, request: request.Request, pk=None, **kwargs) -> Response:  # type: ignore
