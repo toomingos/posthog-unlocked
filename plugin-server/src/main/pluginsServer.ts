@@ -215,12 +215,6 @@ export async function startPluginsServer(
         // 3. clickhouse_events_json and plugin_events_ingestion
         // 4. conversion_events_buffer
         //
-        if (hub.capabilities.http) {
-            // start http server used for the healthcheck
-            // TODO: include bufferConsumer in healthcheck
-            httpServer = createHttpServer(hub!, serverInstance as ServerInstance)
-        }
-
         if (hub.capabilities.processPluginJobs || hub.capabilities.pluginScheduledTasks) {
             graphileWorker = new GraphileWorker(hub)
             // `connectProducer` just runs the PostgreSQL migrations. Ideally it
@@ -268,10 +262,6 @@ export async function startPluginsServer(
                     await piscina.broadcastTask({ task: 'reloadSchedule' })
                     hub.pluginSchedule = await loadPluginSchedule(piscina)
                 }
-            },
-            ['reload-actions']: async () => {
-                status.info('⚡', 'Reloading actions!')
-                await piscina?.broadcastTask({ task: 'reloadAllActions' })
             },
             'reset-available-features-cache': async (message) => {
                 await piscina?.broadcastTask({ task: 'resetAvailableFeaturesCache', args: JSON.parse(message) })
@@ -371,6 +361,12 @@ export async function startPluginsServer(
 
         hub.lastActivity = new Date().valueOf()
         hub.lastActivityType = 'serverStart'
+
+        if (hub.capabilities.http) {
+            // start http server used for the healthcheck
+            // TODO: include bufferConsumer in healthcheck
+            httpServer = createHttpServer(hub!, serverInstance as ServerInstance)
+        }
 
         return serverInstance as ServerInstance
     } catch (error) {
