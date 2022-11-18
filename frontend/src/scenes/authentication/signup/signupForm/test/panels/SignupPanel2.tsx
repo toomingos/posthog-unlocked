@@ -1,8 +1,8 @@
-import { LemonInput, LemonSelect, LemonButton, Link } from '@posthog/lemon-ui'
+import { LemonInput, LemonButton, Link } from '@posthog/lemon-ui'
 import { useValues } from 'kea'
 import { Form } from 'kea-forms'
+import SignupRoleSelect from 'lib/components/SignupRoleSelect'
 import { Field } from 'lib/forms/Field'
-import RegionSelect from 'scenes/authentication/RegionSelect'
 import { preflightLogic } from 'scenes/PreflightCheck/preflightLogic'
 import { signupLogic } from '../signupLogic'
 
@@ -15,7 +15,6 @@ export function SignupPanel2(): JSX.Element | null {
     return (
         <div className="space-y-4 Signup__panel__2">
             <Form logic={signupLogic} formKey={'signupPanel2'} className="space-y-4" enableFormOnSubmit>
-                <RegionSelect />
                 <Field name="first_name" label="Your name">
                     <LemonInput
                         className="ph-ignore-input"
@@ -32,37 +31,7 @@ export function SignupPanel2(): JSX.Element | null {
                         disabled={isSignupPanel2Submitting}
                     />
                 </Field>
-                <Field name="role_at_organization" label="What is your role?">
-                    <LemonSelect
-                        fullWidth
-                        options={[
-                            {
-                                label: 'Engineering',
-                                value: 'engineering',
-                            },
-                            {
-                                label: 'Product Management',
-                                value: 'product',
-                            },
-                            {
-                                label: 'Executive',
-                                value: 'executive',
-                            },
-                            {
-                                label: 'Customer Success',
-                                value: 'customer-success',
-                            },
-                            {
-                                label: 'Sales',
-                                value: 'sales',
-                            },
-                            {
-                                label: 'Other',
-                                value: 'other',
-                            },
-                        ]}
-                    />
-                </Field>
+                <SignupRoleSelect />
                 <Field name="referral_source" label="Where did you hear about us?" showOptional>
                     <LemonInput
                         className="ph-ignore-input"

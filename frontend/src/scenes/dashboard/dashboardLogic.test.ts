@@ -8,7 +8,6 @@ import { dashboardsModel } from '~/models/dashboardsModel'
 import { insightsModel } from '~/models/insightsModel'
 import { eventUsageLogic } from 'lib/utils/eventUsageLogic'
 import {
-    ChartDisplayType,
     DashboardTile,
     DashboardType,
     InsightColor,
@@ -120,7 +119,7 @@ describe('dashboardLogic', () => {
         const insights: Record<number, InsightModel> = {
             172: {
                 ...insightOnDashboard(172, [5, 6], {
-                    filters: { insight: InsightType.RETENTION, display: ChartDisplayType.ActionsLineGraph },
+                    filters: { insight: InsightType.RETENTION },
                 }),
                 short_id: '172' as InsightShortId,
             },
@@ -432,7 +431,7 @@ describe('dashboardLogic', () => {
                     })
                     .toDispatchActions(['loadDashboardItemsSuccess'])
                     .toMatchValues({
-                        allItems: dashboards['5'],
+                        allItems: expect.objectContaining(dashboards['5']),
                         tiles: truth((tiles) => tiles.length === 3),
                         insightTiles: truth((insightTiles) => insightTiles.length === 2),
                         textTiles: truth((textTiles) => textTiles.length === 1),
@@ -517,7 +516,10 @@ describe('dashboardLogic', () => {
 
             it('reloads selected items', async () => {
                 await expectLogic(logic, () => {
-                    logic.actions.refreshAllDashboardItems([dashboards['5'].tiles[0] as DashboardTile])
+                    logic.actions.refreshAllDashboardItems({
+                        tiles: [dashboards['5'].tiles[0] as DashboardTile],
+                        action: 'refresh_manual',
+                    })
                 })
                     .toFinishAllListeners()
                     .toDispatchActions([
