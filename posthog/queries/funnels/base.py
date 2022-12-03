@@ -250,8 +250,6 @@ class ClickhouseFunnelBase(ABC):
             self.params,
             query_type=self.QUERY_TYPE,
             filter=self._filter,
-            client_query_id=self._filter.client_query_id,
-            client_query_team_id=self._team.pk,
         )
 
     def _get_timestamp_outer_select(self) -> str:
@@ -711,7 +709,11 @@ class ClickhouseFunnelBase(ABC):
                 )
         elif self._filter.breakdown_type == "event":
             basic_prop_selector = get_single_or_multi_property_string_expr(
-                self._filter.breakdown, table="events", query_alias="prop_basic", column="properties"
+                self._filter.breakdown,
+                table="events",
+                query_alias="prop_basic",
+                column="properties",
+                normalize_url=self._filter.breakdown_normalize_url,
             )
         elif self._filter.breakdown_type == "cohort":
             basic_prop_selector = "value AS prop_basic"

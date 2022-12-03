@@ -39,7 +39,6 @@ class Stickiness:
         WHERE num_intervals <= %(num_intervals)s
         GROUP BY num_intervals
         ORDER BY num_intervals
-        SETTINGS optimize_move_to_prewhere = 0
         """
 
         counts = insight_sync_execute(
@@ -47,8 +46,6 @@ class Stickiness:
             {**event_params, "num_intervals": filter.total_intervals},
             query_type="stickiness",
             filter=filter,
-            client_query_id=filter.client_query_id,
-            client_query_team_id=team.pk,
         )
         return self.process_result(counts, filter, entity)
 

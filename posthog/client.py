@@ -3,6 +3,7 @@ import json
 import time
 import types
 from dataclasses import dataclass
+from functools import lru_cache
 from time import perf_counter
 from typing import (
     Any,
@@ -21,12 +22,12 @@ from clickhouse_driver import Client as SyncClient
 from clickhouse_pool import ChPool
 from dataclasses_json import dataclass_json
 from django.conf import settings as app_settings
+from statshog.defaults.django import statsd
 
 from posthog import redis
 from posthog.celery import enqueue_clickhouse_execute_with_progress
-from posthog.clickhouse.query_tagging import get_query_tags
+from posthog.clickhouse.query_tagging import get_query_tag_value, get_query_tags
 from posthog.errors import wrap_query_error
-from posthog.internal_metrics import incr, timing
 from posthog.settings import (
     CLICKHOUSE_CA,
     CLICKHOUSE_CONN_POOL_MAX,
@@ -51,10 +52,20 @@ SLOW_QUERY_THRESHOLD_MS = 15000
 QUERY_TIMEOUT_THREAD = get_timer_thread("posthog.client", SLOW_QUERY_THRESHOLD_MS)
 
 
-# Optimize_move_to_prewhere setting is set because of this regression test
-# test_ilike_regression_with_current_clickhouse_version
-# https://github.com/PostHog/posthog/blob/master/ee/clickhouse/queries/test/test_trends.py#L1566
-settings_override = {"optimize_move_to_prewhere": 0}
+@lru_cache(maxsize=1)
+def default_settings() -> Dict:
+    from posthog.version_requirement import ServiceVersionRequirement
+
+    # On CH 22.3 we need to disable optimize_move_to_prewhere due to a bug. This is verified fixed on 22.8 (LTS),
+    # so we only disable on versions below that.
+    # This is calculated once per deploy
+    clickhouse_at_least_228, _ = ServiceVersionRequirement(
+        service="clickhouse", supported_version=">=22.8.0"
+    ).is_service_in_accepted_version()
+    if clickhouse_at_least_228:
+        return {}
+    else:
+        return {"optimize_move_to_prewhere": 0}
 
 
 def default_client():
@@ -119,9 +130,10 @@ def cache_sync_execute(query, args=None, redis_client=None, ttl=CACHE_TTL, setti
         return result
 
 
-def validate_client_query_id(
-    client_query_id: Optional[str], client_query_team_id: Optional[int] = None
-) -> Optional[str]:
+def validated_client_query_id() -> Optional[str]:
+    client_query_id = get_query_tag_value("client_query_id")
+    client_query_team_id = get_query_tag_value("team_id")
+
     if client_query_id and not client_query_team_id:
         raise Exception("Query needs to have a team_id arg if you've passed client_query_id")
     random_id = generate_short_id()
@@ -134,8 +146,6 @@ def sync_execute(
     settings=None,
     with_column_types=False,
     flush=True,
-    client_query_id: Optional[str] = None,
-    client_query_team_id: Optional[int] = None,
 ):
     if TEST and flush:
         try:
@@ -152,7 +162,7 @@ def sync_execute(
 
         timeout_task = QUERY_TIMEOUT_THREAD.schedule(_notify_of_slow_query_failure)
 
-        settings = {**settings_override, **(settings or {}), "log_comment": json.dumps(tags, separators=(",", ":"))}
+        settings = {**default_settings(), **(settings or {}), "log_comment": json.dumps(tags, separators=(",", ":"))}
 
         try:
             result = client.execute(
@@ -160,18 +170,18 @@ def sync_execute(
                 params=prepared_args,
                 settings=settings,
                 with_column_types=with_column_types,
-                query_id=validate_client_query_id(client_query_id, client_query_team_id),
+                query_id=validated_client_query_id(),
             )
         except Exception as err:
             err = wrap_query_error(err)
-            incr("clickhouse_sync_execution_failure", tags={"failed": True, "reason": type(err).__name__})
+            statsd.incr("clickhouse_sync_execution_failure", tags={"failed": True, "reason": type(err).__name__})
 
             raise err
         finally:
             execution_time = perf_counter() - start_time
 
             QUERY_TIMEOUT_THREAD.cancel(timeout_task)
-            timing("clickhouse_sync_execution_time", execution_time * 1000.0, tags=tags)
+            statsd.timing("clickhouse_sync_execution_time", execution_time * 1000.0)
 
             if app_settings.SHELL_PLUS_PRINT_SQL:
                 print("Execution time: %.6fs" % (execution_time,))
@@ -300,7 +310,7 @@ def execute_with_progress(
         err = wrap_query_error(err)
         tags["failed"] = True
         tags["reason"] = type(err).__name__
-        incr("clickhouse_sync_execution_failure")
+        statsd.incr("clickhouse_sync_execution_failure")
         query_status = QueryStatus(
             team_id=team_id,
             num_rows=query_status.num_rows,
@@ -322,7 +332,7 @@ def execute_with_progress(
         execution_time = perf_counter() - start_time
 
         QUERY_TIMEOUT_THREAD.cancel(timeout_task)
-        timing("clickhouse_sync_execution_time", execution_time * 1000.0)
+        statsd.timing("clickhouse_sync_execution_time", execution_time * 1000.0)
 
         if app_settings.SHELL_PLUS_PRINT_SQL:
             print("Execution time: %.6fs" % (execution_time,))
@@ -514,7 +524,7 @@ def _annotate_tagged_query(query, args):
 
 
 def _notify_of_slow_query_failure():
-    incr("clickhouse_sync_execution_failure", tags={"failed": True, "reason": "timeout"})
+    statsd.incr("clickhouse_sync_execution_failure", tags={"failed": True, "reason": "timeout"})
 
 
 def format_sql(rendered_sql, colorize=True):

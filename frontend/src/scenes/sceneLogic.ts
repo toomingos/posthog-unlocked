@@ -274,6 +274,7 @@ export const sceneLogic = kea<sceneLogicType>({
                         }
                     } else if (
                         teamLogic.values.currentTeam &&
+                        !teamLogic.values.currentTeam.is_demo &&
                         !teamLogic.values.currentTeam.completed_snippet_onboarding &&
                         !location.pathname.startsWith('/ingestion')
                     ) {
