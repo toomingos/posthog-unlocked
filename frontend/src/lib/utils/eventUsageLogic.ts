@@ -391,7 +391,11 @@ export const eventUsageLogic = kea<eventUsageLogicType>({
         }),
         reportRecordingExportedToFile: true,
         reportRecordingLoadedFromFile: (data: { success: boolean; error?: string }) => data,
+        reportRecordingListVisibilityToggled: (type: string, visible: boolean) => ({ type, visible }),
+        reportRecordingPinnedToList: (pinned: boolean) => ({ pinned }),
+        reportRecordingPlaylistCreated: (source: 'filters' | 'new' | 'pin' | 'duplicate') => ({ source }),
         reportExperimentArchived: (experiment: Experiment) => ({ experiment }),
+        reportExperimentReset: (experiment: Experiment) => ({ experiment }),
         reportExperimentCreated: (experiment: Experiment) => ({ experiment }),
         reportExperimentViewed: (experiment: Experiment) => ({ experiment }),
         reportExperimentLaunched: (experiment: Experiment, launchDate: Dayjs) => ({ experiment, launchDate }),
@@ -489,6 +493,7 @@ export const eventUsageLogic = kea<eventUsageLogicType>({
             completionPercent: number
         ) => ({ activeTasksCount, completedTasksCount, completionPercent }),
         reportActivationSideBarTaskClicked: (key: string) => ({ key }),
+        reportBillingUpgradeClicked: (plan: string) => ({ plan }),
     },
     listeners: ({ values }) => ({
         reportAxisUnitsChanged: (properties) => {
@@ -986,8 +991,26 @@ export const eventUsageLogic = kea<eventUsageLogicType>({
         reportRecordingLoadedFromFile: (properties) => {
             posthog.capture('recording loaded from file', properties)
         },
+        reportRecordingListVisibilityToggled: (properties) => {
+            posthog.capture('recording list visibility toggled', properties)
+        },
+        reportRecordingPinnedToList: (properties) => {
+            posthog.capture('recording pinned to list', properties)
+        },
+        reportRecordingPlaylistCreated: (properties) => {
+            posthog.capture('recording playlist created', properties)
+        },
+
         reportExperimentArchived: ({ experiment }) => {
             posthog.capture('experiment archived', {
+                name: experiment.name,
+                id: experiment.id,
+                filters: sanitizeFilterParams(experiment.filters),
+                parameters: experiment.parameters,
+            })
+        },
+        reportExperimentReset: ({ experiment }) => {
+            posthog.capture('experiment reset', {
                 name: experiment.name,
                 id: experiment.id,
                 filters: sanitizeFilterParams(experiment.filters),
@@ -1178,6 +1201,11 @@ export const eventUsageLogic = kea<eventUsageLogicType>({
         reportActivationSideBarTaskClicked: ({ key }) => {
             posthog.capture('activation sidebar task clicked', {
                 key,
+            })
+        },
+        reportBillingUpgradeClicked: ({ plan }) => {
+            posthog.capture('billing upgrade button clicked', {
+                plan,
             })
         },
     }),
