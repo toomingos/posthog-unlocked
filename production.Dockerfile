@@ -184,7 +184,7 @@ COPY --chown=posthog:posthog gunicorn.config.py ./
 COPY --chown=posthog:posthog ./bin ./bin/
 COPY --chown=posthog:posthog manage.py manage.py
 COPY --chown=posthog:posthog posthog posthog/
-COPY --chown=posthog:posthog ee ee/
+# COPY --chown=posthog:posthog ee ee/
 
 # Setup ENV.
 ENV NODE_ENV=production \
