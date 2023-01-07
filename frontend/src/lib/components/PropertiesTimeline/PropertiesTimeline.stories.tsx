@@ -1,9 +1,9 @@
 import { ComponentMeta } from '@storybook/react'
 import { MOCK_TEAM_ID } from 'lib/api.mock'
 import { useStorybookMocks } from '~/mocks/browser'
-import { PersonActorType } from '~/types'
+import { ChartDisplayType, PersonActorType } from '~/types'
 import { PropertiesTimeline } from '.'
-import { RawPropertiesTimelinePoint } from './propertiesTimelineLogic'
+import { RawPropertiesTimelineResult } from './propertiesTimelineLogic'
 
 export default {
     title: 'Components/Properties Timeline',
@@ -25,42 +25,59 @@ const EXAMPLE_PERSON: PersonActorType = {
 export function MultiplePointsForPerson(): JSX.Element {
     useStorybookMocks({
         get: {
-            [`/api/projects/${MOCK_TEAM_ID}/persons/${EXAMPLE_PERSON.uuid}/properties_timeline/`]: [
-                {
-                    timestamp: '2021-01-01T00:00:00.000Z',
-                    properties: {
-                        name: 'Perry',
+            [`/api/projects/${MOCK_TEAM_ID}/persons/${EXAMPLE_PERSON.uuid}/properties_timeline/`]: {
+                points: [
+                    {
+                        timestamp: '2021-01-01T00:00:00.000Z',
+                        properties: {
+                            hobby: 'hiking',
+                            name: 'Perry',
+                        },
+                        relevant_event_count: 3,
                     },
-                    relevant_event_count: 3,
-                },
-                {
-                    timestamp: '2021-01-17T00:00:00.000Z',
-                    properties: {
-                        name: 'Jerry',
+                    {
+                        timestamp: '2021-01-17T00:00:00.000Z',
+                        properties: {
+                            hobby: 'hiking',
+                            name: 'Jerry',
+                        },
+                        relevant_event_count: 3,
                     },
-                    relevant_event_count: 3,
-                },
-                {
-                    timestamp: '2021-01-18T08:00:00.000Z',
-                    properties: {
-                        name: 'Jerry',
+                    {
+                        timestamp: '2021-01-18T08:00:00.000Z',
+                        properties: {
+                            hobby: 'sailing',
+                            name: 'Kerry',
+                        },
+                        relevant_event_count: 3,
                     },
-                    relevant_event_count: 3,
-                },
-                {
-                    timestamp: '2021-03-01T00:00:00.000Z',
-                    properties: {
-                        name: 'Terry',
+                    {
+                        timestamp: '2021-03-01T00:00:00.000Z',
+                        properties: {
+                            hobby: 'hiking',
+                            name: 'Terry',
+                        },
+                        relevant_event_count: 1,
                     },
-                    relevant_event_count: 1,
-                },
-            ] as RawPropertiesTimelinePoint[],
+                ],
+                crucial_property_keys: ['name'],
+                effective_date_from: '2021-01-01T00:00:00.000000+00:00',
+                effective_date_to: '2021-06-01T23:59:59.999999+00:00',
+            } as RawPropertiesTimelineResult,
         },
     })
 
     return (
         <div className="border rounded max-w-120">
-            <PropertiesTimeline actor={EXAMPLE_PERSON} filter={{}} />
+            <PropertiesTimeline
+                actor={EXAMPLE_PERSON}
+                filter={{
+                    date_from: '2021-01-01',
+                    date_to: '2021-06-01',
+                    interval: 'day',
+                    display: ChartDisplayType.ActionsLineGraph,
+                }}
+            />
         </div>
     )
 }
