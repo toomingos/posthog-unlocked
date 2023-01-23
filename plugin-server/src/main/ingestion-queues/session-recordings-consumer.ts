@@ -1,6 +1,7 @@
 import { PluginEvent } from '@posthog/plugin-scaffold'
 import { StatsD } from 'hot-shots'
 import { EachBatchPayload, Kafka } from 'kafkajs'
+import { exponentialBuckets, Histogram } from 'prom-client'
 
 import { KAFKA_SESSION_RECORDING_EVENTS, KAFKA_SESSION_RECORDING_EVENTS_DLQ } from '../../config/kafka-topics'
 import { PipelineEvent, RawEventMessage } from '../../types'
@@ -11,6 +12,7 @@ import { createPerformanceEvent, createSessionRecordingEvent } from '../../worke
 import { TeamManager } from '../../worker/ingestion/team-manager'
 import { parseEventTimestamp } from '../../worker/ingestion/timestamps'
 import { instrumentEachBatch, setupEventHandlers } from './kafka-queue'
+import { latestOffsetTimestampGauge } from './metrics'
 
 export const startSessionRecordingEventsConsumer = async ({
     teamManager,
@@ -38,7 +40,8 @@ export const startSessionRecordingEventsConsumer = async ({
     await producer.connect()
     const producerWrapper = new KafkaProducerWrapper(producer, statsd, { KAFKA_FLUSH_FREQUENCY_MS: 0 } as any)
 
-    const consumer = kafka.consumer({ groupId: 'session-recordings' })
+    const groupId = 'session-recordings'
+    const consumer = kafka.consumer({ groupId: groupId })
     setupEventHandlers(consumer)
 
     status.info('🔁', 'Starting session recordings consumer')
@@ -49,7 +52,7 @@ export const startSessionRecordingEventsConsumer = async ({
         eachBatch: async (payload) => {
             return await instrumentEachBatch(
                 KAFKA_SESSION_RECORDING_EVENTS,
-                eachBatch({ producer: producerWrapper, teamManager }),
+                eachBatch({ producer: producerWrapper, teamManager, groupId }),
                 payload
             )
         },
@@ -59,9 +62,25 @@ export const startSessionRecordingEventsConsumer = async ({
 }
 
 export const eachBatch =
-    ({ producer, teamManager }: { producer: KafkaProducerWrapper; teamManager: TeamManager }) =>
+    ({
+        producer,
+        teamManager,
+        groupId,
+    }: {
+        producer: KafkaProducerWrapper
+        teamManager: TeamManager
+        groupId: string
+    }) =>
     async ({ batch, heartbeat }: Pick<EachBatchPayload, 'batch' | 'heartbeat'>) => {
         status.debug('🔁', 'Processing batch', { size: batch.messages.length })
+
+        consumerBatchSize
+            .labels({
+                topic: batch.topic,
+                groupId,
+            })
+            .observe(batch.messages.length)
+
         for (const message of batch.messages) {
             if (!message.value) {
                 status.warn('⚠️', 'invalid_message', {
@@ -96,6 +115,14 @@ export const eachBatch =
 
             status.debug('⬆️', 'processing_session_recording', { uuid: messagePayload.uuid })
 
+            consumedMessageSizeBytes
+                .labels({
+                    topic: batch.topic,
+                    groupId,
+                    messageType: event.event,
+                })
+                .observe(message.value.length)
+
             if (!messagePayload.team_id && !event.token) {
                 status.warn('⚠️', 'invalid_message', {
                     reason: 'no_token',
@@ -125,8 +152,8 @@ export const eachBatch =
                 if (event.event === '$snapshot') {
                     await createSessionRecordingEvent(
                         messagePayload.uuid,
-                        messagePayload.team_id,
-                        event.distinct_id,
+                        teamId,
+                        messagePayload.distinct_id,
                         parseEventTimestamp(event as PluginEvent),
                         event.ip,
                         event.properties || {},
@@ -135,8 +162,8 @@ export const eachBatch =
                 } else if (event.event === '$performance_event') {
                     await createPerformanceEvent(
                         messagePayload.uuid,
-                        messagePayload.team_id,
-                        event.distinct_id,
+                        teamId,
+                        messagePayload.distinct_id,
                         event.properties || {},
                         event.ip,
                         parseEventTimestamp(event as PluginEvent),
@@ -198,5 +225,24 @@ export const eachBatch =
             // to the DLQ.
         }
 
-        status.info('✅', 'Processed batch', { size: batch.messages.length })
+        const lastBatchMessage = batch.messages[batch.messages.length - 1]
+        latestOffsetTimestampGauge
+            .labels({ partition: batch.partition, topic: batch.topic, groupId })
+            .set(Number.parseInt(lastBatchMessage.timestamp))
+
+        status.debug('✅', 'Processed batch', { size: batch.messages.length })
     }
+
+const consumerBatchSize = new Histogram({
+    name: 'consumed_batch_size',
+    help: 'Size of the batch fetched by the consumer',
+    labelNames: ['topic', 'groupId'],
+    buckets: exponentialBuckets(1, 3, 5),
+})
+
+const consumedMessageSizeBytes = new Histogram({
+    name: 'consumed_message_size_bytes',
+    help: 'Size of consumed message value in bytes',
+    labelNames: ['topic', 'groupId', 'messageType'],
+    buckets: exponentialBuckets(1, 8, 4).map((bucket) => bucket * 1024),
+})

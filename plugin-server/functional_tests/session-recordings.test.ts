@@ -16,7 +16,14 @@ import { v4 as uuidv4 } from 'uuid'
 
 import { defaultConfig } from '../src/config/config'
 import { UUIDT } from '../src/utils/utils'
-import { capture, createOrganization, createTeam, fetchPerformanceEvents, fetchSessionRecordingsEvents } from './api'
+import {
+    capture,
+    createOrganization,
+    createTeam,
+    fetchPerformanceEvents,
+    fetchSessionRecordingsEvents,
+    getMetric,
+} from './api'
 import { waitForExpect } from './expectations'
 
 CompressionCodecs[CompressionTypes.Snappy] = SnappyCodec
@@ -85,6 +92,42 @@ test.concurrent(
             $session_id: '1234abc',
             $snapshot_data: 'yes way',
         })
+
+        await waitForExpect(async () => {
+            const events = await fetchSessionRecordingsEvents(clickHouseClient, teamId)
+            expect(events.length).toBe(1)
+
+            // processEvent did not modify
+            expect(events[0].snapshot_data).toEqual('yes way')
+        })
+    },
+    20000
+)
+
+test.concurrent(
+    `snapshot captured, processed, ingested via session_recording_events topic with no team_id set`,
+    async () => {
+        // We have switched from pushing the `events_plugin_ingestion` to
+        // pushing to `session_recording_events`. There will still be session
+        // recording events in the `events_plugin_ingestion` topic for a while
+        // so we need to still handle these events with the current consumer.
+        const token = uuidv4()
+        const teamId = await createTeam(postgres, organizationId, undefined, token)
+        const distinctId = new UUIDT().toString()
+        const uuid = new UUIDT().toString()
+
+        await capture(
+            producer,
+            null,
+            distinctId,
+            uuid,
+            '$snapshot',
+            {
+                $session_id: '1234abc',
+                $snapshot_data: 'yes way',
+            },
+            token
+        )
 
         await waitForExpect(async () => {
             const events = await fetchSessionRecordingsEvents(clickHouseClient, teamId)
@@ -255,6 +298,35 @@ test.concurrent(
     },
     20000
 )
+
+test.concurrent('consumer updates timestamp exported to prometheus', async () => {
+    // NOTE: it may be another event other than the one we emit here that causes
+    // the gauge to increase, but pushing this event through should at least
+    // ensure that the gauge is updated.
+    const metricBefore = await getMetric({
+        name: 'latest_processed_timestamp_ms',
+        type: 'GAUGE',
+        labels: { topic: 'session_recording_events', partition: '0', groupId: 'session-recordings' },
+    })
+
+    await producer.send({
+        topic: 'session_recording_events',
+        // NOTE: we don't actually care too much about the contents of the
+        // message, just that it triggeres the consumer to try to process it.
+        messages: [{ key: '', value: '' }],
+    })
+
+    await waitForExpect(async () => {
+        const metricAfter = await getMetric({
+            name: 'latest_processed_timestamp_ms',
+            type: 'GAUGE',
+            labels: { topic: 'session_recording_events', partition: '0', groupId: 'session-recordings' },
+        })
+        expect(metricAfter).toBeGreaterThan(metricBefore)
+        expect(metricAfter).toBeLessThan(Date.now()) // Make sure, e.g. we're not setting micro seconds
+        expect(metricAfter).toBeGreaterThan(Date.now() - 60_000) // Make sure, e.g. we're not setting seconds
+    }, 10_000)
+})
 
 test.concurrent(`handles invalid JSON`, async () => {
     const key = uuidv4()
