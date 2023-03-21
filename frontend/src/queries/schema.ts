@@ -63,6 +63,9 @@ export enum NodeKind {
 
     /** Performance */
     RecentPerformancePageViewNode = 'RecentPerformancePageViewNode',
+
+    // Database metadata
+    DatabaseSchemaQuery = 'DatabaseSchemaQuery',
 }
 
 export type AnyDataNode = EventsNode | EventsQuery | ActionsNode | PersonsNode | HogQLQuery | TimeToSeeDataSessionsQuery
@@ -89,6 +92,7 @@ export type QuerySchema =
 
     // Misc
     | TimeToSeeDataSessionsQuery
+    | DatabaseSchemaQuery
 
 /** Node base class, everything else inherits from here */
 export interface Node {
@@ -271,6 +275,8 @@ export interface DataTableNode extends Node {
     showEventsBufferWarning?: boolean
     /** Can the user click on column headers to sort the table? (default: true) */
     allowSorting?: boolean
+    /** Show a button to open the current query as a new insight. (default: true) */
+    showOpenEditorButton?: boolean
 }
 
 // Insight viz node
@@ -424,6 +430,10 @@ export interface TimeToSeeDataSessionsQuery extends DataNode {
     response?: TimeToSeeDataSessionsQueryResponse
 }
 
+export interface DatabaseSchemaQuery extends DataNode {
+    kind: NodeKind.DatabaseSchemaQuery
+}
+
 export interface TimeToSeeDataQuery extends DataNode {
     kind: NodeKind.TimeToSeeDataQuery
 
@@ -486,6 +496,9 @@ export interface BreakdownFilter {
 export interface QueryContext {
     /** Column templates for the DataTable */
     columns?: Record<string, QueryContextColumn>
+    /** used to override the value in the query */
+    showOpenEditorButton?: boolean
+    showQueryEditor?: boolean
 }
 
 interface QueryContextColumn {

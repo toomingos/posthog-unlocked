@@ -108,7 +108,7 @@ export const INSIGHT_TYPES_METADATA: Record<InsightType, InsightTypeMetadata> = 
     },
     [InsightType.SQL]: {
         name: 'SQL',
-        description: 'Use SQL to query your data',
+        description: 'Use PostHog SQL to query your data',
         icon: InsightSQLIcon,
         inMenu: true,
     },
@@ -116,7 +116,7 @@ export const INSIGHT_TYPES_METADATA: Record<InsightType, InsightTypeMetadata> = 
         name: 'JSON',
         description: 'Build custom insights with our JSON query language',
         icon: InsightSQLIcon,
-        inMenu: false, // until data exploration is released
+        inMenu: true,
     },
 }
 
@@ -238,6 +238,12 @@ export const QUERY_TYPES_METADATA: Record<NodeKind, InsightTypeMetadata> = {
     [NodeKind.HogQLQuery]: {
         name: 'HogQL',
         description: 'Direct HogQL query',
+        icon: InsightSQLIcon,
+        inMenu: true,
+    },
+    [NodeKind.DatabaseSchemaQuery]: {
+        name: 'Database Schema',
+        description: 'Introspect the PostHog database schema',
         icon: InsightSQLIcon,
         inMenu: true,
     },

@@ -1318,6 +1318,10 @@
                     "description": "Include a HogQL query editor above HogQL tables",
                     "type": "boolean"
                 },
+                "showOpenEditorButton": {
+                    "description": "Show a button to open the current query as a new insight. (default: true)",
+                    "type": "boolean"
+                },
                 "showPropertyFilter": {
                     "description": "Include a property filter above the table",
                     "type": "boolean"
@@ -1359,6 +1363,21 @@
                 }
             },
             "required": ["kind", "source"],
+            "type": "object"
+        },
+        "DatabaseSchemaQuery": {
+            "additionalProperties": false,
+            "properties": {
+                "kind": {
+                    "const": "DatabaseSchemaQuery",
+                    "type": "string"
+                },
+                "response": {
+                    "description": "Cached query response",
+                    "type": "object"
+                }
+            },
+            "required": ["kind"],
             "type": "object"
         },
         "DateRange": {
@@ -2590,6 +2609,9 @@
                 },
                 {
                     "$ref": "#/definitions/TimeToSeeDataSessionsQuery"
+                },
+                {
+                    "$ref": "#/definitions/DatabaseSchemaQuery"
                 }
             ]
         },
