@@ -271,8 +271,6 @@ export interface DataTableNode extends Node {
     expandable?: boolean
     /** Link properties via the URL (default: false) */
     propertiesViaUrl?: boolean
-    /** Show warning about live events being buffered max 60 sec (default: false) */
-    showEventsBufferWarning?: boolean
     /** Can the user click on column headers to sort the table? (default: true) */
     allowSorting?: boolean
     /** Show a button to open the current query as a new insight. (default: true) */
@@ -499,6 +497,10 @@ export interface QueryContext {
     /** used to override the value in the query */
     showOpenEditorButton?: boolean
     showQueryEditor?: boolean
+    /* Adds help and examples to the query editor component */
+    showQueryHelp?: boolean
+    emptyStateHeading?: string
+    emptyStateDetail?: string
 }
 
 interface QueryContextColumn {

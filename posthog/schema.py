@@ -166,6 +166,7 @@ class EventType(BaseModel):
     person: Optional[Person] = None
     properties: Dict[str, Any]
     timestamp: str
+    uuid: Optional[str] = None
 
 
 class MathGroupTypeIndex1(float, Enum):
@@ -916,9 +917,6 @@ class DataTableNode(BaseModel):
     showElapsedTime: Optional[bool] = Field(None, description="Show the time it takes to run a query")
     showEventFilter: Optional[bool] = Field(
         None, description="Include an event filter above the table (EventsNode only)"
-    )
-    showEventsBufferWarning: Optional[bool] = Field(
-        None, description="Show warning about live events being buffered max 60 sec (default: false)"
     )
     showExport: Optional[bool] = Field(None, description="Show the export button")
     showHogQLEditor: Optional[bool] = Field(None, description="Include a HogQL query editor above HogQL tables")

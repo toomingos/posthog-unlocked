@@ -21,16 +21,20 @@ export interface InsightSceneProps {
 
 export function Insight({ insightId }: InsightSceneProps): JSX.Element {
     // insightSceneLogic
-    const { insightMode } = useValues(insightSceneLogic)
+    const { insightMode, insight } = useValues(insightSceneLogic)
 
     // insightLogic
-    const logic = insightLogic({ dashboardItemId: insightId || 'new' })
+    const logic = insightLogic({
+        dashboardItemId: insightId || 'new',
+        cachedInsight: insight?.short_id === insightId ? insight : null,
+    })
     const {
         insightProps,
         insightLoading,
         filtersKnown,
         filters,
         isUsingDataExploration,
+        isUsingDashboardQueries,
         erroredQueryId,
         isFilterBasedInsight,
     } = useValues(logic)
@@ -67,22 +71,27 @@ export function Insight({ insightId }: InsightSceneProps): JSX.Element {
         return <InsightSkeleton />
     }
 
+    const actuallyShowQueryEditor =
+        isUsingDashboardQueries &&
+        insightMode === ItemMode.Edit &&
+        ((isQueryBasedInsight && !containsHogQLQuery(query)) || showQueryEditor)
+
     const insightScene = (
         <div className={'insights-page'}>
             <InsightPageHeader insightLogicProps={insightProps} />
 
             {insightMode === ItemMode.Edit && <InsightsNav />}
 
-            {isUsingDataExploration ? (
+            {isUsingDataExploration || (isUsingDashboardQueries && isQueryBasedInsight) ? (
                 <>
                     <Query
                         query={query}
                         setQuery={insightMode === ItemMode.Edit ? setQuery : undefined}
+                        readOnly={insightMode !== ItemMode.Edit}
                         context={{
                             showOpenEditorButton: false,
-                            showQueryEditor:
-                                insightMode === ItemMode.Edit &&
-                                ((isQueryBasedInsight && !containsHogQLQuery(query)) || showQueryEditor),
+                            showQueryEditor: actuallyShowQueryEditor,
+                            showQueryHelp: insightMode === ItemMode.Edit && !containsHogQLQuery(query),
                         }}
                     />
                 </>
