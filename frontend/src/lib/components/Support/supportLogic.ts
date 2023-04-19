@@ -6,6 +6,7 @@ import { userLogic } from 'scenes/userLogic'
 import type { supportLogicType } from './supportLogicType'
 import { forms } from 'kea-forms'
 import { UserType } from '~/types'
+import { lemonToast } from 'lib/lemon-ui/lemonToast'
 
 function getSessionReplayLink(): string {
     const LOOK_BACK = 30
@@ -13,7 +14,7 @@ function getSessionReplayLink(): string {
         Math.floor((new Date().getTime() - (posthog?.sessionManager?._sessionStartTimestamp || 0)) / 1000) - LOOK_BACK,
         0
     )
-    const link = `${window.location.origin}/recordings/${posthog?.sessionRecording?.sessionId}?t=${recordingStartTime}`
+    const link = `https://app.posthog.com/recordings/${posthog?.sessionRecording?.sessionId}?t=${recordingStartTime}`
     return `\nSession replay: ${link}`
 }
 
@@ -26,6 +27,45 @@ function getDjangoAdminLink(user: UserType | null): string {
     return `\nAdmin link: ${link} (Organization: '${user.organization?.name}'; Project: '${user.team?.name}')`
 }
 
+export const TargetAreaToName = {
+    analytics: 'Analytics',
+    app_performance: 'App Performance',
+    apps: 'Apps',
+    billing: 'Billing',
+    cohorts: 'Cohorts',
+    data_management: 'Data Management',
+    data_integrity: 'Data Integrity',
+    ingestion: 'Events Ingestion',
+    experiments: 'Experiments',
+    feature_flags: 'Feature Flags',
+    login: 'Login / Sign up / Invites',
+    session_reply: 'Session Replay',
+}
+export type supportTicketTargetArea = keyof typeof TargetAreaToName | null
+export type supportTicketKind = 'bug' | 'feedback' | null
+
+export const URLPathToTargetArea: Record<string, supportTicketTargetArea> = {
+    insights: 'analytics',
+    recordings: 'session_reply',
+    dashboard: 'analytics',
+    feature_flags: 'feature_flags',
+    experiments: 'experiments',
+    'web-performance': 'session_reply',
+    events: 'analytics',
+    'data-management': 'data_management',
+    cohorts: 'cohorts',
+    annotations: 'analytics',
+    persons: 'data_integrity',
+    groups: 'data_integrity',
+    app: 'apps',
+    toolbar: 'analytics',
+}
+
+export function getURLPathToTargetArea(pathname: string): supportTicketTargetArea | null {
+    const first_part = pathname.split('/')[1]
+    return URLPathToTargetArea[first_part] ?? null
+}
+
 export const supportLogic = kea<supportLogicType>([
     path(['lib', 'components', 'support', 'supportLogic']),
     connect(() => ({
@@ -33,8 +73,15 @@ export const supportLogic = kea<supportLogicType>([
     })),
     actions(() => ({
         closeSupportForm: () => true,
-        openSupportForm: () => true,
-        submitZendeskTicket: (kind: string, target_area: string, message: string) => ({ kind, target_area, message }),
+        openSupportForm: (kind: supportTicketKind = null, target_area: supportTicketTargetArea = null) => ({
+            kind,
+            target_area,
+        }),
+        submitZendeskTicket: (kind: supportTicketKind, target_area: supportTicketTargetArea, message: string) => ({
+            kind,
+            target_area,
+            message,
+        }),
     })),
     reducers(() => ({
         isSupportFormOpen: [
@@ -47,7 +94,11 @@ export const supportLogic = kea<supportLogicType>([
     })),
     forms(({ actions }) => ({
         sendSupportRequest: {
-            defaults: {} as unknown as { kind: string; target_area: string; message: string },
+            defaults: {} as unknown as {
+                kind: supportTicketKind
+                target_area: supportTicketTargetArea
+                message: string
+            },
             errors: ({ message, kind, target_area }) => {
                 return {
                     message: !message ? 'Please enter a message' : '',
@@ -62,7 +113,14 @@ export const supportLogic = kea<supportLogicType>([
             },
         },
     })),
-    listeners(({}) => ({
+    listeners(({ actions }) => ({
+        openSupportForm: async ({ kind, target_area }) => {
+            actions.resetSendSupportRequest({
+                kind,
+                target_area: target_area ?? getURLPathToTargetArea(window.location.pathname),
+                message: '',
+            })
+        },
         submitZendeskTicket: async ({ kind, target_area, message }) => {
             const name = userLogic.values.user?.first_name
             const email = userLogic.values.user?.email
@@ -101,9 +159,13 @@ export const supportLogic = kea<supportLogicType>([
                         zendesk_ticket_link: `https://posthoghelp.zendesk.com/agent/tickets/${zendesk_ticket_id}`,
                     }
                     posthog.capture('support_ticket', properties)
+                    lemonToast.success(
+                        'Got it! The relevant team will check it out and aim to respond via email if necessary.'
+                    )
                 })
                 .catch((err) => {
                     console.log(err)
+                    lemonToast.error('Failed to submit form.')
                 })
         },
     })),

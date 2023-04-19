@@ -15,7 +15,7 @@ import {
 import { PluginConfigSchema } from '@posthog/plugin-scaffold'
 import { PluginInstallationType } from 'scenes/plugins/types'
 import { UploadFile } from 'antd/lib/upload/interface'
-import { eventWithTime } from 'rrweb/typings/types'
+import { eventWithTime } from '@rrweb/types'
 import { PostHog } from 'posthog-js'
 import { PopoverProps } from 'lib/lemon-ui/Popover/Popover'
 import { Dayjs, dayjs } from 'lib/dayjs'
@@ -1346,7 +1346,7 @@ export interface PluginType {
     organization_id: string
     organization_name: string
     metrics?: Record<string, StoredMetricMathOperations>
-    capabilities?: Record<'jobs' | 'methods' | 'scheduled_tasks', string[]>
+    capabilities?: Record<'jobs' | 'methods' | 'scheduled_tasks', string[] | undefined>
     public_jobs?: Record<string, JobSpec>
 }
 
