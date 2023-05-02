@@ -125,6 +125,7 @@ urlpatterns = [
     opt_slash_path("_health", health),
     opt_slash_path("_stats", stats),
     opt_slash_path("_preflight", preflight_check),
+    #
     # ee
     *ee_urlpatterns,
     # admin
