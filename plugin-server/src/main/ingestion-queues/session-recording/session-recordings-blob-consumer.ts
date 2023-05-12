@@ -1,3 +1,4 @@
+import { captureException } from '@sentry/node'
 import { mkdirSync, rmSync } from 'node:fs'
 import { CODES, HighLevelProducer as RdKafkaProducer, Message } from 'node-rdkafka-acosom'
 import path from 'path'
@@ -199,8 +200,14 @@ export class SessionRecordingBlobIngester {
         status.info('🔁', 'blob_ingester_consumer - starting session recordings blob consumer')
 
         // Currently we can't reuse any files stored on disk, so we opt to delete them all
-        rmSync(bufferFileDir(this.serverConfig.SESSION_RECORDING_LOCAL_DIRECTORY), { recursive: true, force: true })
-        mkdirSync(bufferFileDir(this.serverConfig.SESSION_RECORDING_LOCAL_DIRECTORY), { recursive: true })
+        try {
+            rmSync(bufferFileDir(this.serverConfig.SESSION_RECORDING_LOCAL_DIRECTORY), { recursive: true, force: true })
+            mkdirSync(bufferFileDir(this.serverConfig.SESSION_RECORDING_LOCAL_DIRECTORY), { recursive: true })
+        } catch (e) {
+            status.error('🔥', 'Failed to recreate local buffer directory', e)
+            captureException(e)
+            throw e
+        }
 
         const connectionConfig = createRdConnectionConfigFromEnvVars(this.serverConfig as KafkaConfig)
         this.producer = await createKafkaProducer(connectionConfig)
@@ -307,24 +314,23 @@ export class SessionRecordingBlobIngester {
 
         // We trigger the flushes from this level to reduce the number of running timers
         this.flushInterval = setInterval(() => {
-            const offsetSize = this.offsetManager?.estimateSize()
-            status.info('🚛', 'blob_ingester_consumer - offsets size_estimate', { offsetSize })
-
-            let sessionManagerChunksSizes = 0
-            let sessionManagerBufferOffsetsSizes = 0
             let sessionManangerBufferSizes = 0
-            this.sessions.forEach((sessionManager) => {
-                const guesstimates = sessionManager.guesstimateSizes()
-                sessionManagerChunksSizes += guesstimates.chunks
-                sessionManagerBufferOffsetsSizes += guesstimates.bufferOffsets
-                sessionManangerBufferSizes += guesstimates.buffer
-                void sessionManager.flushIfSessionIsIdle()
-            })
 
-            status.info('🚛', 'blob_ingester_consumer - session manager size_estimate', {
-                chunksSize: sessionManagerChunksSizes,
-                buffersOffsetsSize: sessionManagerBufferOffsetsSizes,
-                buffersSize: sessionManangerBufferSizes,
+            this.sessions.forEach((sessionManager) => {
+                sessionManangerBufferSizes += sessionManager.buffer.size
+
+                void sessionManager.flushIfSessionBufferIsOld().catch((err) => {
+                    status.error(
+                        '🚽',
+                        'blob_ingester_consumer - failed trying to flush on idle session: ' + sessionManager.sessionId,
+                        {
+                            err,
+                            session_id: sessionManager.sessionId,
+                        }
+                    )
+                    captureException(err, { tags: { session_id: sessionManager.sessionId } })
+                    throw err
+                })
             })
 
             gaugeSessionsHandled.set(this.sessions.size)
