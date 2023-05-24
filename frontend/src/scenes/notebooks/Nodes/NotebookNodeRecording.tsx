@@ -9,6 +9,8 @@ import { NotebookNodeType } from 'scenes/notebooks/Nodes/types'
 import { urls } from 'scenes/urls'
 import { createUrlRegex } from './utils'
 
+const HEIGHT = 500
+
 const Component = (props: NodeViewProps): JSX.Element => {
     const id = props.node.attrs.id
     const recordingLogicProps: SessionRecordingPlayerProps = {
@@ -22,11 +24,10 @@ const Component = (props: NodeViewProps): JSX.Element => {
             {...props}
             className={NotebookNodeType.Recording}
             title="Recording"
-            href={urls.sessionRecording(recordingLogicProps.sessionRecordingId)}
-            // TODO: Fix "meta" preview
-            // preview={<PlayerMeta {...recordingLogicProps} />}
+            href={urls.replaySingle(recordingLogicProps.sessionRecordingId)}
+            heightEstimate={HEIGHT}
         >
-            <div style={{ height: 500 }}>
+            <div style={{ height: HEIGHT }}>
                 <SessionRecordingPlayer {...recordingLogicProps} />
             </div>
         </NodeWrapper>
@@ -66,7 +67,7 @@ export const NotebookNodeRecording = Node.create({
     addPasteRules() {
         return [
             nodePasteRule({
-                find: createUrlRegex(urls.sessionRecording('') + '(.+)'),
+                find: createUrlRegex(urls.replaySingle('') + '(.+)'),
                 type: this.type,
                 getAttributes: (match) => {
                     return { id: match[1] }
