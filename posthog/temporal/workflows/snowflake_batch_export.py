@@ -102,20 +102,6 @@ async def insert_into_snowflake_activity(inputs: SnowflakeInsertInputs):
 
         try:
             cursor = conn.cursor()
-            cursor.execute(
-                f"""
-                CREATE DATABASE IF NOT EXISTS "{inputs.database}"
-                COMMENT = 'PostHog generated database'
-                """
-            )
-
-            cursor.execute(
-                f"""
-                CREATE SCHEMA IF NOT EXISTS "{inputs.database}"."{inputs.schema}"
-                COMMENT = 'PostHog generated schema'
-                """
-            )
-
             cursor.execute(f'USE DATABASE "{inputs.database}"')
             cursor.execute(f'USE SCHEMA "{inputs.schema}"')
 
@@ -158,8 +144,17 @@ async def insert_into_snowflake_activity(inputs: SnowflakeInsertInputs):
                     if not result:
                         break
 
+                    # Make sure the properties attribute is parsed as JSON
+                    # TODO: this may well be a change that is worth making in
+                    # the other batch export workflows as well, although I leave
+                    # this as a followup.
+                    row = {
+                        **result,
+                        "properties": json.loads(result.get("properties", "{}")),
+                    }
+
                     # Write the results to a local file
-                    local_results_file.write(json.dumps(result).encode("utf-8"))
+                    local_results_file.write(json.dumps(row).encode("utf-8"))
                     local_results_file.write("\n".encode("utf-8"))
 
                     # Write results to Snowflake when the file reaches 50MB and
