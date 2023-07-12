@@ -9,14 +9,14 @@ import { LemonTabs } from 'lib/lemon-ui/LemonTabs'
 import { capitalizeFirstLetter } from 'lib/utils'
 import { useState, useEffect } from 'react'
 import { pluginsLogic } from 'scenes/plugins/pluginsLogic'
-import { urls } from 'scenes/urls'
 import { Query } from '~/queries/Query/Query'
 import { defaultSurveyAppearance, surveyLogic } from './surveyLogic'
 import { surveysLogic } from './surveysLogic'
 import { PageHeader } from 'lib/components/PageHeader'
 import { SurveyReleaseSummary } from './Survey'
 import { SurveyAppearance } from './SurveyAppearance'
-import { SurveyQuestionType } from '~/types'
+import { SurveyQuestionType, SurveyType } from '~/types'
+import { SurveyAPIEditor } from './SurveyAPIEditor'
 
 export function SurveyView({ id }: { id: string }): JSX.Element {
     const { survey, dataTableQuery, surveyLoading, surveyPlugin, surveyMetricsQueries } = useValues(surveyLogic)
@@ -107,30 +107,48 @@ export function SurveyView({ id }: { id: string }): JSX.Element {
                         activeKey={tabKey}
                         onChange={(key) => setTabKey(key)}
                         tabs={[
+                            survey.start_date
+                                ? {
+                                      content: (
+                                          <div>
+                                              {surveyMetricsQueries && (
+                                                  <div className="flex flex-row gap-4 mb-4">
+                                                      <div className="flex-1">
+                                                          <Query query={surveyMetricsQueries.surveysShown} />
+                                                      </div>
+                                                      <div className="flex-1">
+                                                          <Query query={surveyMetricsQueries.surveysDismissed} />
+                                                      </div>
+                                                  </div>
+                                              )}
+                                              {surveyLoading ? <LemonSkeleton /> : <Query query={dataTableQuery} />}
+                                          </div>
+                                      ),
+                                      key: 'results',
+                                      label: 'Results',
+                                  }
+                                : null,
                             {
                                 content: (
                                     <div className="flex flex-row">
                                         <div className="flex flex-col w-full">
-                                            <span className="card-secondary mt-4">Type</span>
-                                            <span>{capitalizeFirstLetter(survey.questions[0].type)}</span>
-                                            <span className="card-secondary mt-4">Question</span>
-                                            {survey.questions.map((q, idx) => (
-                                                <span key={idx}>{q.question}</span>
-                                            ))}
+                                            <span className="card-secondary mt-4">Mode</span>
+                                            <span>{capitalizeFirstLetter(survey.type)}</span>
+                                            {survey.questions[0].question && (
+                                                <>
+                                                    <span className="card-secondary mt-4">Type</span>
+                                                    <span>{capitalizeFirstLetter(survey.questions[0].type)}</span>
+                                                    <span className="card-secondary mt-4">Question</span>
+                                                    {survey.questions.map((q, idx) => (
+                                                        <span key={idx}>{q.question}</span>
+                                                    ))}
+                                                </>
+                                            )}
                                             {survey.questions[0].type === SurveyQuestionType.Link && (
                                                 <>
                                                     <span className="card-secondary mt-4">Link url</span>
                                                     <span>{survey.questions[0].link}</span>
                                                 </>
-                                            )}
-
-                                            <span className="card-secondary mt-4">Linked feature flag</span>
-                                            {survey.linked_flag ? (
-                                                <Link to={urls.featureFlag(survey.linked_flag.id)}>
-                                                    {survey.linked_flag.key}
-                                                </Link>
-                                            ) : (
-                                                <span>None</span>
                                             )}
                                             <div className="flex flex-row gap-8">
                                                 {survey.start_date && (
@@ -147,16 +165,15 @@ export function SurveyView({ id }: { id: string }): JSX.Element {
                                                 )}
                                             </div>
                                             <LemonDivider />
-                                            <span className="card-secondary">Release summary</span>
                                             <SurveyReleaseSummary
                                                 id={id}
                                                 survey={survey}
-                                                targetingFlagFilters={survey.targeting_flag?.filters}
+                                                hasTargetingFlag={!!survey.targeting_flag}
                                             />
                                         </div>
                                         <div className="w-full flex flex-col items-center">
                                             <LemonCollapse
-                                                className="w-full"
+                                                className="w-full mb-2"
                                                 panels={[
                                                     {
                                                         key: '1',
@@ -203,44 +220,27 @@ export function SurveyView({ id }: { id: string }): JSX.Element {
                                                     },
                                                 ]}
                                             />
-                                            <div className="mt-6">
-                                                <SurveyAppearance
-                                                    type={survey.questions[0].type}
-                                                    appearance={survey.appearance || defaultSurveyAppearance}
-                                                    question={survey.questions[0].question}
-                                                    description={survey.questions[0].description}
-                                                    link={survey.questions[0].link}
-                                                    readOnly={true}
-                                                    onAppearanceChange={() => {}}
-                                                />
-                                            </div>
+                                            {survey.type !== SurveyType.API ? (
+                                                <div className="mt-6">
+                                                    <SurveyAppearance
+                                                        type={survey.questions[0].type}
+                                                        appearance={survey.appearance || defaultSurveyAppearance}
+                                                        question={survey.questions[0].question}
+                                                        description={survey.questions[0].description}
+                                                        link={survey.questions[0].link}
+                                                        readOnly={true}
+                                                        onAppearanceChange={() => {}}
+                                                    />
+                                                </div>
+                                            ) : (
+                                                <SurveyAPIEditor survey={survey} />
+                                            )}
                                         </div>
                                     </div>
                                 ),
                                 key: 'overview',
                                 label: 'Overview',
                             },
-                            survey.start_date
-                                ? {
-                                      content: (
-                                          <div>
-                                              {surveyMetricsQueries && (
-                                                  <div className="flex flex-row gap-4 mb-4">
-                                                      <div className="flex-1">
-                                                          <Query query={surveyMetricsQueries.surveysShown} />
-                                                      </div>
-                                                      <div className="flex-1">
-                                                          <Query query={surveyMetricsQueries.surveysDismissed} />
-                                                      </div>
-                                                  </div>
-                                              )}
-                                              {surveyLoading ? <LemonSkeleton /> : <Query query={dataTableQuery} />}
-                                          </div>
-                                      ),
-                                      key: 'results',
-                                      label: 'Results',
-                                  }
-                                : null,
                         ]}
                     />
                 </>

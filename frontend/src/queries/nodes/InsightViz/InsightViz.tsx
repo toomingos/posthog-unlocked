@@ -7,6 +7,8 @@ import { isFunnelsQuery } from '~/queries/utils'
 
 import { dataNodeLogic, DataNodeLogicProps } from '../DataNode/dataNodeLogic'
 import { InsightQueryNode, InsightVizNode, QueryContext } from '../../schema'
+import { FEATURE_FLAGS } from 'lib/constants'
+import { featureFlagLogic } from 'lib/logic/featureFlagLogic'
 
 import { InsightContainer } from './InsightContainer'
 import { EditorFilters } from './EditorFilters'
@@ -24,11 +26,12 @@ type InsightVizProps = {
     query: InsightVizNode
     setQuery?: (node: InsightVizNode) => void
     context?: QueryContext
+    readOnly?: boolean
 }
 
 let uniqueNode = 0
 
-export function InsightViz({ query, setQuery, context }: InsightVizProps): JSX.Element {
+export function InsightViz({ query, setQuery, context, readOnly }: InsightVizProps): JSX.Element {
     const [key] = useState(() => `InsightViz.${uniqueNode++}`)
     const insightProps: InsightLogicProps = context?.insightProps || { dashboardItemId: `new-AdHoc.${key}` }
     const dataNodeLogicProps: DataNodeLogicProps = {
@@ -38,6 +41,7 @@ export function InsightViz({ query, setQuery, context }: InsightVizProps): JSX.E
     }
 
     const { insightMode } = useValues(insightSceneLogic)
+    const { featureFlags } = useValues(featureFlagLogic)
 
     const isFunnels = isFunnelsQuery(query.source)
 
@@ -52,6 +56,11 @@ export function InsightViz({ query, setQuery, context }: InsightVizProps): JSX.E
     const disableLastComputation = query.showLastComputation ? !query.showLastComputation : !showIfFull
     const disableLegendButton = query.showLegendButton ? !query.showLegendButton : !showIfFull
 
+    const disableLastComputationRefresh =
+        query.showLastComputationRefresh !== undefined
+            ? !query.showLastComputationRefresh
+            : !featureFlags[FEATURE_FLAGS.REFRESH_BUTTON_ON_INSIGHT]
+
     return (
         <BindLogic logic={insightLogic} props={insightProps}>
             <BindLogic logic={dataNodeLogic} props={dataNodeLogicProps}>
@@ -60,11 +69,13 @@ export function InsightViz({ query, setQuery, context }: InsightVizProps): JSX.E
                         'insight-wrapper--singlecolumn': isFunnels,
                     })}
                 >
-                    <EditorFilters
-                        query={query.source}
-                        setQuery={setQuerySource}
-                        showing={insightMode === ItemMode.Edit}
-                    />
+                    {!readOnly && (
+                        <EditorFilters
+                            query={query.source}
+                            setQuery={setQuerySource}
+                            showing={insightMode === ItemMode.Edit}
+                        />
+                    )}
 
                     <div className="insights-container" data-attr="insight-view">
                         <InsightContainer
@@ -74,6 +85,7 @@ export function InsightViz({ query, setQuery, context }: InsightVizProps): JSX.E
                             disableTable={disableTable}
                             disableCorrelationTable={disableCorrelationTable}
                             disableLastComputation={disableLastComputation}
+                            disableLastComputationRefresh={disableLastComputationRefresh}
                             disableLegendButton={disableLegendButton}
                         />
                     </div>
