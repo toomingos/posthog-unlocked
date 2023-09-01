@@ -9,7 +9,9 @@ import StarterKit from '@tiptap/starter-kit'
 import ExtensionPlaceholder from '@tiptap/extension-placeholder'
 import ExtensionDocument from '@tiptap/extension-document'
 
+import { NotebookNodeFlagCodeExample } from '../Nodes/NotebookNodeFlagCodeExample'
 import { NotebookNodeFlag } from '../Nodes/NotebookNodeFlag'
+import { NotebookNodeExperiment } from '../Nodes/NotebookNodeExperiment'
 import { NotebookNodeQuery } from '../Nodes/NotebookNodeQuery'
 import { NotebookNodeInsight } from '../Nodes/NotebookNodeInsight'
 import { NotebookNodeRecording } from '../Nodes/NotebookNodeRecording'
@@ -27,6 +29,7 @@ import { NotebookNodeImage } from '../Nodes/NotebookNodeImage'
 import { JSONContent, NotebookEditor, EditorFocusPosition, EditorRange, Node } from './utils'
 import { SlashCommandsExtension } from './SlashCommands'
 import { BacklinkCommandsExtension } from './BacklinkCommands'
+import { NotebookNodeEarlyAccessFeature } from '../Nodes/NotebookNodeEarlyAccessFeature'
 
 const CustomDocument = ExtensionDocument.extend({
     content: 'heading block*',
@@ -36,11 +39,13 @@ export function Editor({
     initialContent,
     onCreate,
     onUpdate,
+    onSelectionUpdate,
     placeholder,
 }: {
     initialContent: JSONContent
     onCreate: (editor: NotebookEditor) => void
     onUpdate: () => void
+    onSelectionUpdate: () => void
     placeholder: ({ node }: { node: any }) => string
 }): JSX.Element {
     const editorRef = useRef<TTEditor>()
@@ -50,7 +55,7 @@ export function Editor({
     const updatePreviousNode = useCallback(() => {
         const editor = editorRef.current
         if (editor) {
-            setPreviousNode(getPreviousNode(editor))
+            setPreviousNode(getNodeBeforeActiveNode(editor))
         }
     }, [editorRef.current])
 
@@ -85,14 +90,16 @@ export function Editor({
             NotebookNodeReplayTimestamp,
             NotebookNodePlaylist,
             NotebookNodePerson,
+            NotebookNodeFlagCodeExample,
             NotebookNodeFlag,
+            NotebookNodeExperiment,
+            NotebookNodeEarlyAccessFeature,
             NotebookNodeImage,
             SlashCommandsExtension,
             BacklinkCommandsExtension,
         ],
         content: initialContent,
         editorProps: {
-            attributes: { class: 'NotebookEditor' },
             handleDrop: (view, event, _slice, moved) => {
                 const editor = editorRef.current
                 if (!editor) {
@@ -172,10 +179,14 @@ export function Editor({
         },
         onCreate: ({ editor }) => {
             editorRef.current = editor
+
             onCreate({
                 getJSON: () => editor.getJSON(),
+                getSelectedNode: () => editor.state.doc.nodeAt(editor.state.selection.$anchor.pos),
+                getAdjacentNodes: (pos: number) => getAdjacentNodes(editor, pos),
                 setEditable: (editable: boolean) => queueMicrotask(() => editor.setEditable(editable, false)),
                 setContent: (content: JSONContent) => queueMicrotask(() => editor.commands.setContent(content, false)),
+                setSelection: (position: number) => editor.commands.setNodeSelection(position),
                 focus: (position: EditorFocusPosition) => queueMicrotask(() => editor.commands.focus(position)),
                 destroy: () => editor.destroy(),
                 isEmpty: () => editor.isEmpty,
@@ -185,20 +196,27 @@ export function Editor({
                     const endPosition = findEndPositionOfNode(editor, position)
                     if (endPosition) {
                         editor.chain().focus().insertContentAt(endPosition, content).run()
+                        editor.commands.scrollIntoView()
                     }
                 },
                 findNode: (position: number) => findNode(editor, position),
                 findNodePositionByAttrs: (attrs: Record<string, any>) => findNodePositionByAttrs(editor, attrs),
                 nextNode: (position: number) => nextNode(editor, position),
                 hasChildOfType: (node: Node, type: string) => !!firstChildOfType(node, type),
+                scrollToSelection: () => {
+                    const position = editor.state.selection.$anchor.pos
+                    const domEl = editor.view.nodeDOM(position) as HTMLElement
+                    domEl.scrollIntoView({ behavior: 'smooth', block: 'start', inline: 'nearest' })
+                },
             })
         },
         onUpdate: onUpdate,
+        onSelectionUpdate: onSelectionUpdate,
     })
 
     return (
         <>
-            <EditorContent editor={_editor} className="flex flex-col flex-1" />
+            <EditorContent editor={_editor} className="NotebookEditor flex flex-col flex-1" />
             {_editor && <FloatingSuggestions editor={_editor} />}
         </>
     )
@@ -270,10 +288,16 @@ function getChildren(node: Node, direct: boolean = true): Node[] {
     return children
 }
 
-function getPreviousNode(editor: TTEditor): Node | null {
-    const { $anchor } = editor.state.selection
-    const node = $anchor.node(1)
-    return !!node ? editor.state.doc.childBefore($anchor.pos - 1).node : null
+function getAdjacentNodes(editor: TTEditor, pos: number): { previous: Node | null; next: Node | null } {
+    const { doc } = editor.state
+    const currentIndex = doc.resolve(pos).index(0)
+    return { previous: doc.maybeChild(currentIndex - 1), next: doc.maybeChild(currentIndex + 1) }
+}
+
+function getNodeBeforeActiveNode(editor: TTEditor): Node | null {
+    const { doc, selection } = editor.state
+    const currentIndex = doc.resolve(selection.$anchor.pos).index(0)
+    return doc.maybeChild(currentIndex - 1)
 }
 
 export function hasMatchingNode(
