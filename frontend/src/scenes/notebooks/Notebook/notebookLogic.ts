@@ -319,7 +319,7 @@ export const notebookLogic = kea<notebookLogicType>([
                             return (
                                 nodeLogic.props.nodeType === type &&
                                 attrEntries.every(
-                                    ([attr, value]: [string, any]) => nodeLogic.props.node.attrs?.[attr] === value
+                                    ([attr, value]: [string, any]) => nodeLogic.props.attributes?.[attr] === value
                                 )
                             )
                         }) ?? null
@@ -329,9 +329,7 @@ export const notebookLogic = kea<notebookLogicType>([
         ],
         isShowingSidebar: [
             (s) => [s.selectedNodeLogic],
-            (selectedNodeLogic) => {
-                return !!selectedNodeLogic?.values.widgets.length
-            },
+            (selectedNodeLogic) => selectedNodeLogic?.values.isShowingWidgets,
         ],
     }),
     sharedListeners(({ values, actions }) => ({

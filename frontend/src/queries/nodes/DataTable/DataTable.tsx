@@ -65,8 +65,8 @@ let uniqueNode = 0
 
 export function DataTable({ uniqueKey, query, setQuery, context, cachedResults }: DataTableProps): JSX.Element {
     const uniqueNodeKey = useState(() => uniqueNode++)
-    const [vizKey] = useState(() => `DataTable.${uniqueKey || uniqueNodeKey}`)
     const [dataKey] = useState(() => `DataNode.${uniqueKey || uniqueNodeKey}`)
+    const [vizKey] = useState(() => `DataTable.${uniqueNodeKey}`)
 
     const dataNodeLogicProps: DataNodeLogicProps = {
         query: query.source,
@@ -109,6 +109,7 @@ export function DataTable({ uniqueKey, query, setQuery, context, cachedResults }
         embedded,
         showOpenEditorButton,
         showResultsTable,
+        showTimings,
     } = queryWithDefaults
 
     const isReadOnly = setQuery === undefined
@@ -327,7 +328,7 @@ export function DataTable({ uniqueKey, query, setQuery, context, cachedResults }
     )
 
     const firstRowLeft = [
-        showDateRange && isEventsQuery(query.source) ? (
+        showDateRange && (isEventsQuery(query.source) || isHogQLQuery(query.source)) ? (
             <DateRange query={query.source} setQuery={setQuerySource} />
         ) : null,
         showEventFilter && isEventsQuery(query.source) ? (
@@ -336,7 +337,7 @@ export function DataTable({ uniqueKey, query, setQuery, context, cachedResults }
         showSearch && isPersonsNode(query.source) ? (
             <PersonsSearch query={query.source} setQuery={setQuerySource} />
         ) : null,
-        showPropertyFilter && isEventsQuery(query.source) ? (
+        showPropertyFilter && (isEventsQuery(query.source) || isHogQLQuery(query.source)) ? (
             <EventPropertyFilters query={query.source} setQuery={setQuerySource} />
         ) : null,
         showPropertyFilter && isPersonsNode(query.source) ? (
@@ -351,7 +352,7 @@ export function DataTable({ uniqueKey, query, setQuery, context, cachedResults }
     const secondRowLeft = [
         showReload ? <Reload /> : null,
         showReload && canLoadNewData ? <AutoLoad /> : null,
-        showElapsedTime ? <ElapsedTime /> : null,
+        showElapsedTime ? <ElapsedTime showTimings={showTimings} /> : null,
     ].filter((x) => !!x)
 
     const secondRowRight = [
@@ -373,9 +374,9 @@ export function DataTable({ uniqueKey, query, setQuery, context, cachedResults }
                         <HogQLQueryEditor query={query.source} setQuery={setQuerySource} />
                     ) : null}
                     {showFirstRow && (
-                        <div className="flex gap-4 items-center">
+                        <div className="flex gap-4 items-center flex-wrap">
                             {firstRowLeft}
-                            <div className="flex-1" />
+                            {firstRowLeft.length > 0 && firstRowRight.length > 0 ? <div className="flex-1" /> : null}
                             {firstRowRight}
                             {showOpenEditorButton && inlineEditorButtonOnRow === 1 && !isReadOnly ? (
                                 <OpenEditorButton query={query} />
@@ -386,7 +387,7 @@ export function DataTable({ uniqueKey, query, setQuery, context, cachedResults }
                     {showSecondRow && (
                         <div className="flex gap-4 items-center">
                             {secondRowLeft}
-                            <div className="flex-1" />
+                            {secondRowLeft.length > 0 && secondRowRight.length > 0 ? <div className="flex-1" /> : null}
                             {secondRowRight}
                             {showOpenEditorButton && inlineEditorButtonOnRow === 2 && !isReadOnly ? (
                                 <OpenEditorButton query={query} />
