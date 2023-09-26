@@ -343,6 +343,7 @@ export interface TeamType extends TeamBasicType {
     capture_console_log_opt_in: boolean
     capture_performance_opt_in: boolean
     autocapture_exceptions_opt_in: boolean
+    surveys_opt_in?: boolean
     autocapture_exceptions_errors_to_ignore: string[]
     test_account_filters: AnyPropertyFilter[]
     test_account_filters_default_checked: boolean
@@ -586,10 +587,10 @@ export interface HogQLPropertyFilter extends BasePropertyFilter {
 }
 
 export interface EmptyPropertyFilter {
-    type?: undefined
-    value?: undefined
-    operator?: undefined
-    key?: undefined
+    type?: never
+    value?: never
+    operator?: never
+    key?: never
 }
 
 export type AnyPropertyFilter =
@@ -786,8 +787,7 @@ export type EntityFilter = {
     order?: number
 }
 
-// TODO: Separate FunnelStepRange and FunnelStepRangeEntity filter types
-export interface FunnelStepRangeEntityFilter extends Partial<EntityFilter> {
+export interface FunnelExclusion extends Partial<EntityFilter> {
     funnel_from_step?: number
     funnel_to_step?: number
 }
@@ -1669,51 +1669,62 @@ export interface TrendsFilterType extends FilterType {
     // number of intervals, e.g. for a day interval, we may want to smooth over
     // 7 days to remove weekly variation. Smoothing is performed as a moving average.
     smoothing_intervals?: number
-    show_legend?: boolean // used to show/hide legend next to insights graph
-    hidden_legend_keys?: Record<string, boolean | undefined> // used to toggle visibilities in table and legend
     compare?: boolean
-    aggregation_axis_format?: AggregationAxisFormat // a fixed format like duration that needs calculation
-    aggregation_axis_prefix?: string // a prefix to add to the aggregation axis e.g. £
-    aggregation_axis_postfix?: string // a postfix to add to the aggregation axis e.g. %
     formula?: string
     shown_as?: ShownAsValue
     display?: ChartDisplayType
-    show_values_on_series?: boolean
-    show_percent_stack_view?: boolean
     breakdown_histogram_bin_count?: number // trends breakdown histogram bin count
-}
-export interface StickinessFilterType extends FilterType {
-    compare?: boolean
+
+    // frontend only
     show_legend?: boolean // used to show/hide legend next to insights graph
     hidden_legend_keys?: Record<string, boolean | undefined> // used to toggle visibilities in table and legend
-    stickiness_days?: number
+    aggregation_axis_format?: AggregationAxisFormat // a fixed format like duration that needs calculation
+    aggregation_axis_prefix?: string // a prefix to add to the aggregation axis e.g. £
+    aggregation_axis_postfix?: string // a postfix to add to the aggregation axis e.g. %
+    show_values_on_series?: boolean
+    show_percent_stack_view?: boolean
+}
+
+export interface StickinessFilterType extends FilterType {
+    compare?: boolean
     shown_as?: ShownAsValue
     display?: ChartDisplayType
+
+    // frontend only
+    show_legend?: boolean // used to show/hide legend next to insights graph
+    hidden_legend_keys?: Record<string, boolean | undefined> // used to toggle visibilities in table and legend
     show_values_on_series?: boolean
+
+    // persons only
+    stickiness_days?: number
 }
+
 export interface FunnelsFilterType extends FilterType {
     funnel_viz_type?: FunnelVizType // parameter sent to funnels API for time conversion code path
     funnel_from_step?: number // used in time to convert: initial step index to compute time to convert
     funnel_to_step?: number // used in time to convert: ending step index to compute time to convert
-    funnel_step_reference?: FunnelStepReference // whether conversion shown in graph should be across all steps or just from the previous step
-    funnel_step_breakdown?: string | number[] | number | null // used in steps breakdown: persons modal
     breakdown_attribution_type?: BreakdownAttributionType // funnels breakdown attribution type
     breakdown_attribution_value?: number // funnels breakdown attribution specific step value
     bin_count?: BinCountValue // used in time to convert: number of bins to show in histogram
     funnel_window_interval_unit?: FunnelConversionWindowTimeUnit // minutes, days, weeks, etc. for conversion window
     funnel_window_interval?: number | undefined // length of conversion window
     funnel_order_type?: StepOrderValue
-    exclusions?: FunnelStepRangeEntityFilter[] // used in funnel exclusion filters
-    funnel_correlation_person_entity?: Record<string, any> // Funnel Correlation Persons Filter
-    funnel_correlation_person_converted?: 'true' | 'false' // Funnel Correlation Persons Converted - success or failure counts
-    funnel_custom_steps?: number[] // used to provide custom steps for which to get people in a funnel - primarily for correlation use
-    funnel_advanced?: boolean // used to toggle advanced options on or off
+    exclusions?: FunnelExclusion[] // used in funnel exclusion filters
+    funnel_aggregate_by_hogql?: string
+
+    // frontend only
     layout?: FunnelLayout // used only for funnels
-    funnel_step?: number
+    funnel_step_reference?: FunnelStepReference // whether conversion shown in graph should be across all steps or just from the previous step
+    hidden_legend_keys?: Record<string, boolean | undefined> // used to toggle visibilities in table and legend
+
+    // persons only
     entrance_period_start?: string // this and drop_off is used for funnels time conversion date for the persons modal
     drop_off?: boolean
-    hidden_legend_keys?: Record<string, boolean | undefined> // used to toggle visibilities in table and legend
-    funnel_aggregate_by_hogql?: string
+    funnel_step?: number
+    funnel_step_breakdown?: string | number[] | number | null // used in steps breakdown: persons modal
+    funnel_custom_steps?: number[] // used to provide custom steps for which to get people in a funnel - primarily for correlation use
+    funnel_correlation_person_entity?: Record<string, any> // Funnel Correlation Persons Filter
+    funnel_correlation_person_converted?: 'true' | 'false' // Funnel Correlation Persons Converted - success or failure counts
 }
 export interface PathsFilterType extends FilterType {
     path_type?: PathType
@@ -1726,14 +1737,16 @@ export interface PathsFilterType extends FilterType {
     funnel_filter?: Record<string, any> // Funnel Filter used in Paths
     exclude_events?: string[] // Paths Exclusion type
     step_limit?: number // Paths Step Limit
-    path_start_key?: string // Paths People Start Key
-    path_end_key?: string // Paths People End Key
-    path_dropoff_key?: string // Paths People Dropoff Key
     path_replacements?: boolean
     local_path_cleaning_filters?: PathCleaningFilter[]
     edge_limit?: number | undefined // Paths edge limit
     min_edge_weight?: number | undefined // Paths
     max_edge_weight?: number | undefined // Paths
+
+    // persons only
+    path_start_key?: string // Paths People Start Key
+    path_end_key?: string // Paths People End Key
+    path_dropoff_key?: string // Paths People Dropoff Key
 }
 export interface RetentionFilterType extends FilterType {
     retention_type?: RetentionType
@@ -1745,6 +1758,8 @@ export interface RetentionFilterType extends FilterType {
 }
 export interface LifecycleFilterType extends FilterType {
     shown_as?: ShownAsValue
+
+    // frontend only
     show_values_on_series?: boolean
     toggledLifecycles?: LifecycleToggle[]
 }
@@ -1793,7 +1808,6 @@ export enum RecordingWindowFilter {
 
 export interface EditorFilterProps {
     query: InsightQueryNode
-    setQuery: (node: InsightQueryNode) => void
     insightProps: InsightLogicProps
 }
 
@@ -2055,6 +2069,7 @@ export interface InsightLogicProps {
     doNotLoad?: boolean
     /** query when used as ad-hoc insight */
     query?: InsightVizNode
+    setQuery?: (node: InsightVizNode) => void
 }
 
 export interface SetInsightOptions {
@@ -2074,7 +2089,7 @@ export interface Survey {
     linked_flag: FeatureFlagBasicType | null
     targeting_flag: FeatureFlagBasicType | null
     targeting_flag_filters: Pick<FeatureFlagFilters, 'groups'> | undefined
-    conditions: { url: string; selector: string; is_headless?: boolean } | null
+    conditions: { url: string; selector: string; is_headless?: boolean; seenSurveyWaitPeriodInDays?: number } | null
     appearance: SurveyAppearance
     questions: (BasicSurveyQuestion | LinkSurveyQuestion | RatingSurveyQuestion | MultipleSurveyQuestion)[]
     created_at: string
@@ -2082,6 +2097,7 @@ export interface Survey {
     start_date: string | null
     end_date: string | null
     archived: boolean
+    remove_targeting_flag?: boolean
 }
 
 export enum SurveyType {
@@ -2106,14 +2122,14 @@ export interface SurveyAppearance {
     thankYouMessageDescription?: string
 }
 
-interface SurveyQuestionBase {
+export interface SurveyQuestionBase {
     question: string
     description?: string | null
     required?: boolean
 }
 
 export interface BasicSurveyQuestion extends SurveyQuestionBase {
-    type: SurveyQuestionType.Open | SurveyQuestionType.NPS
+    type: SurveyQuestionType.Open
 }
 
 export interface LinkSurveyQuestion extends SurveyQuestionBase {
@@ -2140,7 +2156,6 @@ export enum SurveyQuestionType {
     Open = 'open',
     MultipleChoice = 'multiple_choice',
     SingleChoice = 'single_choice',
-    NPS = 'nps',
     Rating = 'rating',
     Link = 'link',
 }
@@ -2191,6 +2206,7 @@ export interface FeatureFlagType extends Omit<FeatureFlagBasicType, 'id' | 'team
     rollout_percentage: number | null
     experiment_set: string[] | null
     features: EarlyAccessFeatureType[] | null
+    surveys: Survey[] | null
     rollback_conditions: FeatureFlagRollbackConditions[]
     performed_rollback: boolean
     can_edit: boolean
@@ -3019,6 +3035,8 @@ export type NotebookListItemType = {
 export type NotebookType = NotebookListItemType & {
     content: JSONContent // TODO: Type this better
     version: number
+    // used to power text-based search
+    text_content?: string | null
 }
 
 export enum NotebookNodeType {
@@ -3035,6 +3053,11 @@ export enum NotebookNodeType {
     Backlink = 'ph-backlink',
     ReplayTimestamp = 'ph-replay-timestamp',
     Image = 'ph-image',
+}
+
+export type NotebookNodeResource = {
+    attrs: Record<string, any>
+    type: NotebookNodeType
 }
 
 export enum NotebookTarget {
@@ -3089,6 +3112,8 @@ export type BatchExportDestinationS3 = {
         aws_secret_access_key: string
         exclude_events: string[]
         compression: string | null
+        encryption: string | null
+        kms_key_id: string | null
     }
 }
 
