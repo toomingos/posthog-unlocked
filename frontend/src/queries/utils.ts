@@ -1,3 +1,7 @@
+import { TaxonomicFilterGroupType, TaxonomicFilterValue } from 'lib/components/TaxonomicFilter/types'
+import { dayjs } from 'lib/dayjs'
+import { teamLogic } from 'scenes/teamLogic'
+
 import {
     ActionsNode,
     DatabaseSchemaQuery,
@@ -32,9 +36,6 @@ import {
     WebStatsTableQuery,
     WebTopClicksQuery,
 } from '~/queries/schema'
-import { TaxonomicFilterGroupType, TaxonomicFilterValue } from 'lib/components/TaxonomicFilter/types'
-import { dayjs } from 'lib/dayjs'
-import { teamLogic } from 'scenes/teamLogic'
 
 export function isDataNode(node?: Node | null): node is EventsQuery | PersonsNode | TimeToSeeDataSessionsQuery {
     return (
@@ -232,7 +233,7 @@ export function dateRangeFor(node?: Node): DateRange | undefined {
     return undefined
 }
 
-const nodeKindToFilterProperty: Record<InsightNodeKind, InsightFilterProperty> = {
+export const nodeKindToFilterProperty: Record<InsightNodeKind, InsightFilterProperty> = {
     [NodeKind.TrendsQuery]: 'trendsFilter',
     [NodeKind.FunnelsQuery]: 'funnelsFilter',
     [NodeKind.RetentionQuery]: 'retentionFilter',

@@ -117,7 +117,7 @@ class TestSessionRecordings(APIBaseTest, ClickhouseTestMixin, QueryMatchingTest)
                 30,
                 False,
                 user.pk,
-                10,  # limited from 12 because we don't need that many
+                1,  # even though the user has many distinct ids we don't load them
             ),
         ]
 
@@ -327,12 +327,12 @@ class TestSessionRecordings(APIBaseTest, ClickhouseTestMixin, QueryMatchingTest)
             "click_count": 0,
             "keypress_count": 0,
             "start_url": None,
-            "mouse_activity_count": None,
-            "inactive_seconds": None,
-            "active_seconds": None,
-            "console_error_count": None,
-            "console_log_count": None,
-            "console_warn_count": None,
+            "mouse_activity_count": 0,
+            "inactive_seconds": 30,
+            "active_seconds": 0,
+            "console_error_count": 0,
+            "console_log_count": 0,
+            "console_warn_count": 0,
             "person": {
                 "id": p.id,
                 "name": "bob@bob.com",
