@@ -7,7 +7,7 @@ import { IconOpenInNew } from 'lib/lemon-ui/icons'
 import { useMemo } from 'react'
 import { urls } from 'scenes/urls'
 
-import { SidePanelPaneHeader } from '~/layout/navigation-3000/sidepanel/components/SidePanelPane'
+import { SidePanelPaneHeader } from '~/layout/navigation-3000/sidepanel/components/SidePanelPaneHeader'
 import { NotebookTarget } from '~/types'
 
 import { Notebook } from '../Notebook/Notebook'
@@ -36,14 +36,13 @@ export function NotebookPanel(): JSX.Element | null {
             {!droppedResource ? (
                 <>
                     <SidePanelPaneHeader>
-                        <span className="flex-1">
-                            <NotebookListMini
-                                selectedNotebookId={selectedNotebook}
-                                onSelectNotebook={(notebook) => {
-                                    selectNotebook(notebook.short_id)
-                                }}
-                            />
-                        </span>
+                        <NotebookListMini
+                            selectedNotebookId={selectedNotebook}
+                            onSelectNotebook={(notebook) => {
+                                selectNotebook(notebook.short_id)
+                            }}
+                        />
+                        <div className="flex-1" />
                         {selectedNotebook && <NotebookSyncInfo shortId={selectedNotebook} />}
 
                         <LemonButton

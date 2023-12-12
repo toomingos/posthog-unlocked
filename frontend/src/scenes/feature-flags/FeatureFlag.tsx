@@ -68,6 +68,7 @@ import { featureFlagLogic } from './featureFlagLogic'
 import { featureFlagPermissionsLogic } from './featureFlagPermissionsLogic'
 import FeatureFlagProjects from './FeatureFlagProjects'
 import { FeatureFlagReleaseConditions } from './FeatureFlagReleaseConditions'
+import FeatureFlagSchedule from './FeatureFlagSchedule'
 import { featureFlagsLogic, FeatureFlagsTab } from './featureFlagsLogic'
 import { RecentFeatureFlagInsights } from './RecentFeatureFlagInsightsCard'
 
@@ -221,6 +222,14 @@ export function FeatureFlag({ id }: { id?: string } = {}): JSX.Element {
         })
     }
 
+    if (featureFlags[FEATURE_FLAGS.SCHEDULED_CHANGES_FEATURE_FLAGS]) {
+        tabs.push({
+            label: 'Schedule',
+            key: FeatureFlagsTab.SCHEDULE,
+            content: <FeatureFlagSchedule />,
+        })
+    }
+
     return (
         <>
             <div className="feature-flag">
@@ -264,7 +273,7 @@ export function FeatureFlag({ id }: { id?: string } = {}): JSX.Element {
                                 </div>
                             }
                         />
-                        <LemonDivider />
+                        <LemonDivider className="my-2 non-3000" />
                         {featureFlag.experiment_set && featureFlag.experiment_set?.length > 0 && (
                             <LemonBanner type="warning">
                                 This feature flag is linked to an experiment. Edit settings here only for advanced
@@ -314,9 +323,7 @@ export function FeatureFlag({ id }: { id?: string } = {}): JSX.Element {
                                                 autoCorrect="off"
                                                 spellCheck={false}
                                             />
-                                            <span style={{ fontSize: 13 }} className="text-muted">
-                                                Feature flag keys must be unique
-                                            </span>
+                                            <span className="text-muted text-sm">Feature flag keys must be unique</span>
                                         </>
                                     )}
                                 </Field>
@@ -494,17 +501,9 @@ export function FeatureFlag({ id }: { id?: string } = {}): JSX.Element {
                                             </div>
                                         </div>
                                     }
-                                    description={
-                                        <>
-                                            {featureFlag.name ? (
-                                                <span style={{ fontStyle: 'normal' }}>{featureFlag.name}</span>
-                                            ) : (
-                                                'There is no description for this feature flag.'
-                                            )}
-                                        </>
-                                    }
                                     caption={
                                         <>
+                                            <span>{featureFlag.name || <i>Description (optional)</i>}</span>
                                             {featureFlag?.tags && (
                                                 <>
                                                     {featureFlag.can_edit ? (
@@ -533,7 +532,7 @@ export function FeatureFlag({ id }: { id?: string } = {}): JSX.Element {
                                     }
                                     buttons={
                                         <>
-                                            <div className="flex items-center gap-2 mb-2">
+                                            <div className="flex items-center gap-2">
                                                 <More
                                                     loading={newCohortLoading}
                                                     overlay={
@@ -1016,7 +1015,7 @@ function FeatureFlagRollout({ readOnly }: { readOnly?: boolean }): JSX.Element {
                                                     />
                                                     {filterGroups.filter((group) => group.variant === variant.key)
                                                         .length > 0 && (
-                                                        <span style={{ fontSize: 11 }} className="text-muted">
+                                                        <span className="text-muted text-xs">
                                                             Overridden by{' '}
                                                             <strong>
                                                                 {variantConcatWithPunctuation(

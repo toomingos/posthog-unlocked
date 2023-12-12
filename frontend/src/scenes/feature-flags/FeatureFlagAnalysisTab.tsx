@@ -2,8 +2,9 @@ import { LemonButton } from '@posthog/lemon-ui'
 import { BindLogic, useActions, useValues } from 'kea'
 import { dashboardsLogic } from 'scenes/dashboard/dashboards/dashboardsLogic'
 import { DashboardsTable } from 'scenes/dashboard/dashboards/DashboardsTable'
+import { DashboardTemplateChooser } from 'scenes/dashboard/DashboardTemplateChooser'
 import { newDashboardLogic } from 'scenes/dashboard/newDashboardLogic'
-import { DashboardTemplateChooser, NewDashboardModal } from 'scenes/dashboard/NewDashboardModal'
+import { NewDashboardModal } from 'scenes/dashboard/NewDashboardModal'
 
 import { dashboardsModel } from '~/models/dashboardsModel'
 import { FeatureFlagType } from '~/types'
@@ -47,7 +48,7 @@ function FeatureFlagDashboardsTableContainer(): JSX.Element {
                                 showNewDashboardModal()
                             }}
                         >
-                            New Dashboard
+                            New dashboard
                         </LemonButton>
                     </div>
                 }

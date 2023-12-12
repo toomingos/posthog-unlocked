@@ -68,7 +68,7 @@ export function EarlyAccessFeature({ id }: { id?: string } = {}): JSX.Element {
     return (
         <Form id="early-access-feature" formKey="earlyAccessFeature" logic={earlyAccessFeatureLogic}>
             <PageHeader
-                title={isNewEarlyAccessFeature ? 'New Feature Release' : earlyAccessFeature.name}
+                title={isNewEarlyAccessFeature ? 'New feature release' : earlyAccessFeature.name}
                 buttons={
                     !earlyAccessFeatureLoading ? (
                         earlyAccessFeature.stage != EarlyAccessFeatureStage.GeneralAvailability &&
@@ -274,12 +274,12 @@ export function EarlyAccessFeature({ id }: { id?: string } = {}): JSX.Element {
                         </Field>
                     ) : (
                         <div className="mb-2">
-                            <b>Documentation Url</b>
+                            <b>Documentation URL</b>
                             <div>
                                 {earlyAccessFeature.documentation_url ? (
                                     earlyAccessFeature.documentation_url
                                 ) : (
-                                    <span className="text-muted">No documentation url</span>
+                                    <span className="text-muted">No documentation URL</span>
                                 )}
                             </div>
                         </div>

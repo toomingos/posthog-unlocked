@@ -54,9 +54,10 @@ const eventToPersonProperties = new Set([
     '$current_url',
     '$pathname',
     '$os',
+    '$os_version',
     '$referring_domain',
     '$referrer',
-    // campaign params
+    // campaign params - automatically added by posthog-js here https://github.com/PostHog/posthog-js/blob/master/src/utils/event-utils.ts
     'utm_source',
     'utm_medium',
     'utm_campaign',
@@ -64,6 +65,8 @@ const eventToPersonProperties = new Set([
     'utm_name',
     'utm_term',
     'gclid',
+    'gbraid',
+    'wbraid',
     'fbclid',
     'msclkid',
 ])
