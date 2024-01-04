@@ -263,16 +263,10 @@ class User(AbstractUser, UUIDClassicModel):
         self.update_billing_distinct_ids(organization)
 
     def update_billing_distinct_ids(self, organization: Organization) -> None:
-        from ee.billing.billing_manager import BillingManager  # avoid circular import
-
-        if is_cloud() and get_cached_instance_license() is not None:
-            BillingManager(get_cached_instance_license()).update_billing_distinct_ids(organization)
+        pass
 
     def update_billing_customer_email(self, organization: Organization) -> None:
-        from ee.billing.billing_manager import BillingManager  # avoid circular import
-
-        if is_cloud() and get_cached_instance_license() is not None:
-            BillingManager(get_cached_instance_license()).update_billing_customer_email(organization)
+        pass
 
     def get_analytics_metadata(self):
         team_member_count_all: int = (
