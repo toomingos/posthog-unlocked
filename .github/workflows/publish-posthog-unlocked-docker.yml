@@ -12,6 +12,7 @@ env:
   GHCR_IMAGE_NAME: toomingos/posthog-unlocked
   DOCKERHUB_IMAGE_NAME: toomingos/posthog-unlocked
   DOCKERHUB_USERNAME: toomingos
+  SECRET_KEY: ${{ secrets.SECRET_KEY }}
 
 jobs:
   build-and-push-image:
