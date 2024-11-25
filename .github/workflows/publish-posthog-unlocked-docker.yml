@@ -9,9 +9,9 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  GHCR_IMAGE_NAME: ${{ github.repository }}
-  DOCKERHUB_IMAGE_NAME: posthog-unlocked
-  DOCKERHUB_USERNAME: karambir
+  GHCR_IMAGE_NAME: toomingos/posthog-unlocked
+  DOCKERHUB_IMAGE_NAME: toomingos/posthog-unlocked
+  DOCKERHUB_USERNAME: toomingos
 
 jobs:
   build-and-push-image:
