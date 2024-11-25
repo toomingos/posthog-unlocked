@@ -69,3 +69,18 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+services:
+  db:
+    image: postgres:13
+    environment:
+      POSTGRES_DB: posthog
+      POSTGRES_USER: posthog_user
+      POSTGRES_PASSWORD: gazete2024
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
